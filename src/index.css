@@ -1,0 +1,199 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design Tokens ──────────────────────────────────────────── */
+:root {
+  --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Brand */
+  --accent:      #C8A96E;
+  --accent-dim:  rgba(200,169,110,0.12);
+  --accent-hover:#B8974E;
+
+  /* Blue */
+  --blue:        #4263EB;
+  --blue-dim:    rgba(66,99,235,0.10);
+  --blue-hover:  #3451D1;
+
+  /* Status */
+  --success:  #2D9E5A;
+  --danger:   #E5383B;
+  --warning:  #D97706;
+  --purple:   #7C3AED;
+
+  /* Sidebar (dark) */
+  --sb-bg:        #0C0D10;
+  --sb-border:    rgba(255,255,255,0.06);
+  --sb-text:      rgba(255,255,255,0.40);
+  --sb-active:    rgba(255,255,255,0.92);
+  --sb-hover-bg:  rgba(255,255,255,0.05);
+  --sb-active-bg: rgba(255,255,255,0.09);
+
+  /* Content (warm light) */
+  --bg:           #F7F5F2;
+  --surface:      #FFFFFF;
+  --surface-2:    #F0EDE8;
+  --border:       #E4E1DC;
+  --border-strong:#C8C5C0;
+
+  /* Text */
+  --text:           #141210;
+  --text-secondary: #5A5856;
+  --text-muted:     #8A8480;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow:    0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.09), 0 2px 6px rgba(0,0,0,0.05);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-xl: 0 20px 40px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.06);
+  --shadow-modal: 0 32px 64px rgba(0,0,0,0.14), 0 12px 24px rgba(0,0,0,0.08);
+
+  /* Radii */
+  --r-sm: 6px;
+  --r:    8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease:     cubic-bezier(0.4, 0, 0.2, 1);
+  --fast:     100ms;
+  --normal:   160ms;
+  --slow:     260ms;
+}
+
+/* ─── Reset ──────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Base ───────────────────────────────────────────────────── */
+html { height: 100%; scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  height: 100%;
+}
+
+#root { height: 100%; }
+
+/* ─── Interactive ────────────────────────────────────────────── */
+button {
+  font-family: var(--font);
+  cursor: pointer;
+  min-height: 36px;
+  transition:
+    opacity     var(--normal) var(--ease),
+    background  var(--normal) var(--ease),
+    color       var(--normal) var(--ease),
+    border-color var(--normal) var(--ease),
+    box-shadow  var(--normal) var(--ease),
+    transform   var(--fast)   var(--ease);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Mobile touch targets */
+@media (max-width: 768px) {
+  button, select, input[type="range"] {
+    min-height: 44px;
+  }
+}
+
+input, textarea, select {
+  font-family: var(--font);
+  transition:
+    border-color var(--normal) var(--ease),
+    box-shadow   var(--normal) var(--ease);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--blue) !important;
+  box-shadow: 0 0 0 3px var(--blue-dim) !important;
+}
+
+a { color: var(--blue); text-decoration: none; }
+
+/* ─── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar          { width: 5px; height: 5px; }
+::-webkit-scrollbar-track    { background: transparent; }
+::-webkit-scrollbar-thumb    { background: var(--border-strong); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ─── Selection ──────────────────────────────────────────────── */
+::selection { background: var(--accent-dim); color: var(--text); }
+
+/* ─── Focus ──────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* ─── Animations ─────────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+@keyframes fade-fast {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1;   }
+  50%       { opacity: 0.4; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Utility classes ────────────────────────────────────────── */
+.fade-in   { animation: fade-in   0.22s var(--ease-out) both; }
+.fade-fast { animation: fade-fast 0.14s var(--ease) both; }
+.modal-in  { animation: modal-in  0.22s var(--ease-out) both; }
+.skeleton  { background: var(--surface-2); border-radius: var(--r); animation: skeleton-pulse 1.6s var(--ease) infinite; }
+
+/* ─── App Shell ──────────────────────────────────────────────── */
+.app-shell        { display: flex; height: 100vh; overflow: hidden; }
+.app-sidebar      { width: 220px; background: var(--sb-bg); border-right: 1px solid var(--sb-border); display: flex; flex-direction: column; flex-shrink: 0; }
+.app-content      { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ─── Mobile / Responsive ────────────────────────────────────── */
+@media (max-width: 768px) {
+  .app-shell        { flex-direction: column !important; }
+  .app-sidebar      { width: 100% !important; height: auto !important; flex-direction: row !important; flex-wrap: wrap; padding: 10px 14px !important; }
+  .app-sidebar nav  { display: flex !important; flex-direction: row !important; flex-wrap: wrap; gap: 4px; padding: 0 !important; width: 100%; }
+  .app-content      { height: calc(100vh - 110px) !important; overflow: auto; }
+  .login-split      { flex-direction: column !important; }
+  .login-brand      { display: none !important; }
+  .login-form       { width: 100% !important; min-height: 100vh; }
+}
+
+/* ─── Toast ──────────────────────────────────────────────────── */
+.toast { animation: fade-in 0.2s var(--ease-out) both; }
