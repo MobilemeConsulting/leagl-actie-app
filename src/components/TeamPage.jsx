@@ -42,11 +42,8 @@ async function sendWelcomeEmail({ to, tempPassword, name }) {
           </div>
           <div style="background:#F0EDE8;border:1px solid #E4E1DC;border-radius:8px;padding:16px 20px;margin-bottom:16px;">
             <div style="font-size:12px;font-weight:700;color:#8A8480;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Hoe inloggen?</div>
-            <p style="margin:0 0 8px;font-size:13px;color:#141210;line-height:1.6;">Je kunt inloggen op twee manieren:</p>
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr><td style="vertical-align:top;width:22px;padding-top:2px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C8A96E;margin-top:5px;"></span></td><td style="font-size:13px;color:#141210;line-height:1.6;padding-bottom:8px;"><strong>E-mail + wachtwoord:</strong> gebruik het e-mailadres en tijdelijk wachtwoord hieronder.</td></tr>
-              <tr><td style="vertical-align:top;padding-top:2px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C8A96E;margin-top:5px;"></span></td><td style="font-size:13px;color:#141210;line-height:1.6;"><strong>Single Sign-On (SSO):</strong> log in met je bestaande Google- of Microsoft-account via de knop op de loginpagina — geen apart wachtwoord nodig.</td></tr>
-            </table>
+            <p style="margin:0 0 12px;font-size:13px;color:#141210;line-height:1.6;">Je kunt inloggen met het e-mailadres en tijdelijk wachtwoord hieronder. Maar het mag ook eenvoudiger:</p>
+            <p style="margin:0;font-size:13px;color:#141210;line-height:1.6;background:#FFFFFF;border:1px solid #E4E1DC;border-radius:6px;padding:12px 14px;">💡 <strong>Single Sign-On (SSO):</strong> gebruikt jouw organisatie Office 365 op dit e-mailadres, of heb je een Google-account? Dan kan je op de loginpagina eenvoudig inloggen via de knop <em>"Doorgaan met Microsoft"</em> of <em>"Doorgaan met Google"</em> — zonder apart wachtwoord.</p>
           </div>
           <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:12px 16px;margin-bottom:28px;">
             <p style="margin:0;font-size:13px;color:#92400E;line-height:1.5;">⚠ Logt u in met e-mail + wachtwoord? Bij uw eerste login wordt u gevraagd een nieuw persoonlijk wachtwoord in te stellen.</p>
