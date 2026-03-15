@@ -225,21 +225,17 @@ function AdminLogin({ onAuth }) {
   );
 }
 
-// ── Tenant picker (shown once after login, locked for session) ──────────
-function AdminTenantPicker({ onPick }) {
-  const [tenants, setTenants] = useState([]);
-  useEffect(() => {
-    adminSupabase.from('tenants').select('*').order('name').then(({ data }) => setTenants(data || []));
-  }, []);
+// ── Scoped tenant picker (only tenants the user belongs to) ─────────────
+function AdminTenantPicker({ tenants, onPick }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0C0D10' }}>
       <div style={{ background: C.surface, borderRadius: 16, padding: '44px 44px 40px', width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: C.accent, letterSpacing: '0.12em', marginBottom: 4 }}>LEAGL</div>
         <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Kies jouw organisatie</div>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 28 }}>Selecteer de tenant die je wil beheren.</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 28 }}>Je hebt toegang tot meerdere organisaties.</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {tenants.map(t => (
-            <button key={t.id} onClick={() => onPick(t)}
+            <button key={t.id} onClick={() => onPick(t.id)}
               style={{ display: 'flex', alignItems: 'center', gap: 14, background: C.surface2, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: '14px 18px', cursor: 'pointer', textAlign: 'left', transition: 'border-color 140ms' }}
               onMouseEnter={e => e.currentTarget.style.borderColor = t.primary_color || C.accent}
               onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
@@ -263,16 +259,16 @@ function AdminTenantPicker({ onPick }) {
 // ── Main admin dashboard ───────────────────────────────────────────────
 export default function AdminDashboard() {
   const [authed, setAuthed]               = useState(!!sessionStorage.getItem('admin_auth'));
-  const [selectedTenantId, setSelectedTenantId] = useState(sessionStorage.getItem('admin_tenant_id') || '');
+  const [selectedTenantId, setSelectedTenantId] = useState('');
+  // tenants the current user belongs to (resolved from Supabase session)
+  const [userTenants, setUserTenants]     = useState(null); // null = loading, [] = no access
   const [activeNav, setActiveNav]         = useState('dashboard');
   const [users, setUsers]                 = useState([]);
   const [actions, setActions]             = useState([]);
   const [categories, setCategories]       = useState([]);
   const [loading, setLoading]             = useState(false);
   const [toast, setToast]                 = useState(null);
-
-  // Tenant list only needed for the name/color lookup — not for selection
-  const [tenantsList, setTenantsList]     = useState([]);
+  const [tenantsList, setTenantsList]     = useState([]); // for name/color lookup
 
   // Create user form
   const [newEmail, setNewEmail]   = useState('');
@@ -293,20 +289,33 @@ export default function AdminDashboard() {
     setTimeout(() => setToast(null), 3500);
   }
 
+  // After admin password gate: resolve which tenant(s) this user belongs to
+  useEffect(() => {
+    if (!authed) return;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) { setUserTenants([]); return; }
+      const { data: memberships } = await adminSupabase
+        .from('tenant_users')
+        .select('tenant_id, tenants(id, slug, name, logo_url, primary_color)')
+        .eq('user_id', session.user.id);
+      const tenants = (memberships || []).map(m => m.tenants).filter(Boolean);
+      setUserTenants(tenants);
+      if (tenants.length === 1) setSelectedTenantId(tenants[0].id);
+    });
+  }, [authed]);
+
   const loadData = useCallback(async () => {
     if (!selectedTenantId) return;
     setLoading(true);
-    // Load tenants list (for name/color in sidebar)
     const { data: tenantsData } = await adminSupabase.from('tenants').select('*').order('name');
     setTenantsList(tenantsData || []);
 
     const [{ data: tenantUsersData }, { data: allAuthData }, { data: actsData }, { data: catsData }] = await Promise.all([
-      adminSupabase.from('tenant_users').select('user_id, user_email, role').eq('tenant_id', activeTenantId),
+      adminSupabase.from('tenant_users').select('user_id, user_email, role').eq('tenant_id', selectedTenantId),
       adminSupabase.auth.admin.listUsers(),
-      adminSupabase.from('actions').select('*').order('created_at', { ascending: false }).eq('tenant_id', activeTenantId),
-      adminSupabase.from('categories').select('*').eq('tenant_id', activeTenantId),
+      adminSupabase.from('actions').select('*').order('created_at', { ascending: false }).eq('tenant_id', selectedTenantId),
+      adminSupabase.from('categories').select('*').eq('tenant_id', selectedTenantId),
     ]);
-    // Filter auth users to only those belonging to this tenant
     const tenantUserIds = new Set((tenantUsersData || []).map(u => u.user_id));
     setUsers((allAuthData?.users || []).filter(u => tenantUserIds.has(u.id)));
     setActions(actsData || []);
@@ -322,7 +331,7 @@ export default function AdminDashboard() {
     setLogsLoading(false);
   }, [selectedTenantId]);
 
-  useEffect(() => { if (authed) { loadData(); loadLogs(); } }, [authed, selectedTenantId]);
+  useEffect(() => { if (selectedTenantId) { loadData(); loadLogs(); } }, [selectedTenantId]);
 
   async function createUser(e) {
     e.preventDefault();
@@ -416,10 +425,28 @@ export default function AdminDashboard() {
   }
 
   if (!authed) return <AdminLogin onAuth={() => setAuthed(true)} />;
-  if (!selectedTenantId) return <AdminTenantPicker onPick={t => {
-    sessionStorage.setItem('admin_tenant_id', t.id);
-    setSelectedTenantId(t.id);
-  }} />;
+
+  // Resolving tenant from Supabase session
+  if (userTenants === null) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0C0D10' }}>
+      <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: C.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+    </div>
+  );
+
+  // Not logged in to Supabase
+  if (userTenants.length === 0) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0C0D10' }}>
+      <div style={{ background: C.surface, borderRadius: 16, padding: '44px', width: 400, textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.accent, letterSpacing: '0.12em', marginBottom: 16 }}>LEAGL</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 10 }}>Niet ingelogd</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Log eerst in op de app en kom dan terug naar /admin.</div>
+        <a href="/" style={{ display: 'inline-block', background: C.blue, color: '#fff', textDecoration: 'none', borderRadius: 8, padding: '10px 22px', fontSize: 13, fontWeight: 600 }}>Naar inlogpagina →</a>
+      </div>
+    </div>
+  );
+
+  // Multiple tenants → scoped picker
+  if (!selectedTenantId) return <AdminTenantPicker tenants={userTenants} onPick={id => setSelectedTenantId(id)} />;
 
   // Stats
   const total      = actions.length;
@@ -490,13 +517,15 @@ export default function AdminDashboard() {
           })}
         </nav>
         <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button onClick={() => { sessionStorage.removeItem('admin_tenant_id'); setSelectedTenantId(''); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.32)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, transition: 'color 140ms' }}
-            onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.65)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.32)'}
-          >
-            <RefreshCw size={13} /> Wissel organisatie
-          </button>
+          {userTenants?.length > 1 && (
+            <button onClick={() => setSelectedTenantId('')}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.32)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, transition: 'color 140ms' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.65)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.32)'}
+            >
+              <RefreshCw size={13} /> Wissel organisatie
+            </button>
+          )}
           <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.32)', textDecoration: 'none', transition: 'color 140ms' }}
             onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.65)'}
             onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.32)'}
