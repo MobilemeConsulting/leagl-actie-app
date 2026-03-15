@@ -11,21 +11,35 @@ function genTempPassword() {
   return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
-async function sendWelcomeEmail({ to, tempPassword, name }) {
+async function sendWelcomeEmail({ to, tempPassword, name, role = 'member', tenantName = 'LEAGL' }) {
   if (!BREVO_KEY) { console.warn('VITE_BREVO_API_KEY not set — email skipped'); return; }
   const displayName = name?.trim() || (to.split('@')[0].charAt(0).toUpperCase() + to.split('@')[0].slice(1));
+  const isAdmin = role === 'admin';
+  const adminBlock = isAdmin ? `
+          <div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:8px;padding:20px 24px;margin-bottom:20px;">
+            <div style="font-size:12px;font-weight:700;color:#4338CA;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">🛡 Jouw beheerderstoegang</div>
+            <p style="margin:0 0 10px;font-size:13px;color:#1E1B4B;line-height:1.6;">Je beschikt ook over het <strong>Admin Panel</strong> waarmee je jouw organisatie beheert:</p>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="padding-bottom:8px;vertical-align:top;width:22px;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4263EB;margin-top:5px;"></span></td><td style="padding-bottom:8px;font-size:13px;color:#1E1B4B;line-height:1.6;"><strong>Gebruikers beheren:</strong> nieuwe teamleden toevoegen, deactiveren of wachtwoord resetten.</td></tr>
+              <tr><td style="padding-bottom:8px;vertical-align:top;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4263EB;margin-top:5px;"></span></td><td style="padding-bottom:8px;font-size:13px;color:#1E1B4B;line-height:1.6;"><strong>Alle acties inzien:</strong> volledig overzicht van het team met CSV-export.</td></tr>
+              <tr><td style="vertical-align:top;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4263EB;margin-top:5px;"></span></td><td style="font-size:13px;color:#1E1B4B;line-height:1.6;"><strong>Audit log:</strong> wie heeft wat gewijzigd en wanneer.</td></tr>
+            </table>
+            <div style="margin-top:16px;">
+              <a href="${APP_URL}/admin" style="display:inline-block;background:#4263EB;color:#FFFFFF;text-decoration:none;font-size:13px;font-weight:700;padding:10px 20px;border-radius:7px;">Naar Admin Panel →</a>
+            </div>
+          </div>` : '';
   const html = `<!DOCTYPE html>
 <html lang="nl"><head><meta charset="UTF-8"><title>Welkom bij LEAGL Actie App</title></head>
 <body style="margin:0;padding:0;background:#F7F5F2;font-family:'Helvetica Neue',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F5F2;padding:40px 0;">
     <tr><td align="center">
-      <table width="520" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+      <table width="640" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
         <tr><td style="background:#0C0D10;padding:28px 40px;">
           <div style="font-size:24px;font-weight:800;color:#C8A96E;letter-spacing:3px;">LEAGL</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase;margin-top:4px;">Actie Platform</div>
         </td></tr>
         <tr><td style="padding:40px;">
-          <h1 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#141210;">Welkom bij de Leagl Actie App!</h1>
+          <h1 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#141210;">Welkom bij de ${tenantName} Actie App!</h1>
           <p style="margin:0 0 16px;font-size:14px;color:#141210;line-height:1.7;">Beste ${displayName},</p>
           <p style="margin:0 0 10px;font-size:14px;color:#5A5856;line-height:1.7;">Om onze manier van werken scherper, transparanter en efficiënter te beheren, stappen we vandaag over naar een nieuwe manier van samenwerken via de Team Actions App.</p>
           <p style="margin:0 0 10px;font-size:14px;color:#5A5856;line-height:1.7;">Geen versnipperde informatie meer in mailboxen of papieren actielijsten, maar één centrale <strong>single point of truth</strong>.</p>
@@ -38,6 +52,7 @@ async function sendWelcomeEmail({ to, tempPassword, name }) {
               <tr><td style="vertical-align:top;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C8A96E;margin-top:5px;"></span></td><td style="font-size:13px;color:#141210;line-height:1.6;"><strong>Snel afvinken:</strong> Klaar? Eén klik op 'Afvinken' en de actie verdwijnt naar de historie.</td></tr>
             </table>
           </div>
+          ${adminBlock}
           <div style="background:#FFFFFF;border:1px solid #E4E1DC;border-radius:8px;padding:20px 24px;margin-bottom:20px;">
             <div style="font-size:12px;font-weight:700;color:#8A8480;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Uw inloggegevens</div>
             <table width="100%" cellpadding="0" cellspacing="0">
@@ -71,7 +86,7 @@ async function sendWelcomeEmail({ to, tempPassword, name }) {
     body: JSON.stringify({
       sender: { name: 'LEAGL Actie App', email: SENDER },
       to: [{ email: to }],
-      subject: `Welkom bij de Leagl Actie App, ${displayName}!`,
+      subject: `Welkom bij de ${tenantName} Actie App, ${displayName}!`,
       htmlContent: html,
     }),
   });
@@ -282,7 +297,7 @@ export default function SuperAdminDashboard() {
         user_email: newEmail.trim(),
         role: newRole,
       }]);
-      sendWelcomeEmail({ to: newEmail.trim(), tempPassword: tempPw, name: newName.trim() })
+      sendWelcomeEmail({ to: newEmail.trim(), tempPassword: tempPw, name: newName.trim(), role: newRole, tenantName: tenants.find(t => t.id === selectedTenantId)?.name || 'LEAGL' })
         .then(() => showToast(`Welkomstmail verstuurd naar ${newEmail.trim()}`))
         .catch(e => showToast(`Account aangemaakt maar mail mislukt: ${e.message}`, 'error'));
       setNewName(''); setNewEmail(''); setNewRole('member');

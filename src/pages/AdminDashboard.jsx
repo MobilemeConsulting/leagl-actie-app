@@ -17,21 +17,35 @@ function genTempPassword() {
   return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
-async function sendWelcomeEmail({ to, tempPassword, name }) {
+async function sendWelcomeEmail({ to, tempPassword, name, role = 'member', tenantName = 'LEAGL' }) {
   if (!BREVO_KEY) { console.warn('VITE_BREVO_API_KEY not set — email skipped'); return; }
   const displayName = name?.trim() || (to.split('@')[0].charAt(0).toUpperCase() + to.split('@')[0].slice(1));
+  const isAdmin = role === 'admin';
+  const adminBlock = isAdmin ? `
+          <div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:8px;padding:20px 24px;margin-bottom:20px;">
+            <div style="font-size:12px;font-weight:700;color:#4338CA;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">🛡 Jouw beheerderstoegang</div>
+            <p style="margin:0 0 10px;font-size:13px;color:#1E1B4B;line-height:1.6;">Je beschikt ook over het <strong>Admin Panel</strong> waarmee je jouw organisatie beheert:</p>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="padding-bottom:8px;vertical-align:top;width:22px;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4263EB;margin-top:5px;"></span></td><td style="padding-bottom:8px;font-size:13px;color:#1E1B4B;line-height:1.6;"><strong>Gebruikers beheren:</strong> nieuwe teamleden toevoegen, deactiveren of wachtwoord resetten.</td></tr>
+              <tr><td style="padding-bottom:8px;vertical-align:top;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4263EB;margin-top:5px;"></span></td><td style="padding-bottom:8px;font-size:13px;color:#1E1B4B;line-height:1.6;"><strong>Alle acties inzien:</strong> volledig overzicht van het team met CSV-export.</td></tr>
+              <tr><td style="vertical-align:top;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4263EB;margin-top:5px;"></span></td><td style="font-size:13px;color:#1E1B4B;line-height:1.6;"><strong>Audit log:</strong> wie heeft wat gewijzigd en wanneer.</td></tr>
+            </table>
+            <div style="margin-top:16px;">
+              <a href="${APP_URL}/admin" style="display:inline-block;background:#4263EB;color:#FFFFFF;text-decoration:none;font-size:13px;font-weight:700;padding:10px 20px;border-radius:7px;">Naar Admin Panel →</a>
+            </div>
+          </div>` : '';
   const html = `<!DOCTYPE html>
 <html lang="nl"><head><meta charset="UTF-8"><title>Welkom bij LEAGL Actie App</title></head>
 <body style="margin:0;padding:0;background:#F7F5F2;font-family:'Helvetica Neue',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F5F2;padding:40px 0;">
     <tr><td align="center">
-      <table width="520" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+      <table width="640" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
         <tr><td style="background:#0C0D10;padding:28px 40px;">
           <div style="font-size:24px;font-weight:800;color:#C8A96E;letter-spacing:3px;">LEAGL</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase;margin-top:4px;">Actie Platform</div>
         </td></tr>
         <tr><td style="padding:40px;">
-          <h1 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#141210;">Welkom bij de Leagl Actie App!</h1>
+          <h1 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#141210;">Welkom bij de ${tenantName} Actie App!</h1>
           <p style="margin:0 0 16px;font-size:14px;color:#141210;line-height:1.7;">Beste ${displayName},</p>
           <p style="margin:0 0 10px;font-size:14px;color:#5A5856;line-height:1.7;">Om onze manier van werken scherper, transparanter en efficiënter te beheren, stappen we vandaag over naar een nieuwe manier van samenwerken via de Team Actions App.</p>
           <p style="margin:0 0 10px;font-size:14px;color:#5A5856;line-height:1.7;">Geen versnipperde informatie meer in mailboxen of papieren actielijsten, maar één centrale <strong>single point of truth</strong>.</p>
@@ -54,6 +68,8 @@ async function sendWelcomeEmail({ to, tempPassword, name }) {
               </tr>
             </table>
           </div>
+
+          ${adminBlock}
 
           <div style="background:#FFFFFF;border:1px solid #E4E1DC;border-radius:8px;padding:20px 24px;margin-bottom:20px;">
             <div style="font-size:12px;font-weight:700;color:#8A8480;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Uw inloggegevens</div>
@@ -101,7 +117,7 @@ async function sendWelcomeEmail({ to, tempPassword, name }) {
     body: JSON.stringify({
       sender: { name: 'LEAGL Actie App', email: SENDER },
       to: [{ email: to }],
-      subject: `Welkom bij de Leagl Actie App, ${displayName}!`,
+      subject: `Welkom bij de ${tenantName} Actie App, ${displayName}!`,
       htmlContent: html,
     }),
   });
@@ -248,28 +264,34 @@ export default function AdminDashboard() {
     const { data: tenantsData } = await adminSupabase.from('tenants').select('*').order('name');
     setTenantsList(tenantsData || []);
 
-    let actsQuery  = adminSupabase.from('actions').select('*').order('created_at', { ascending: false });
-    let catsQuery  = adminSupabase.from('categories').select('*');
-    if (selectedTenantId) {
-      actsQuery = actsQuery.eq('tenant_id', selectedTenantId);
-      catsQuery = catsQuery.eq('tenant_id', selectedTenantId);
+    // Auto-select first tenant if none selected yet
+    const activeTenantId = selectedTenantId || tenantsData?.[0]?.id || '';
+    if (!selectedTenantId && activeTenantId) setSelectedTenantId(activeTenantId);
+
+    if (!activeTenantId) {
+      setUsers([]); setActions([]); setCategories([]);
+      setLoading(false);
+      return;
     }
-    const [{ data: usersData }, { data: actsData }, { data: catsData }] = await Promise.all([
+
+    const [{ data: tenantUsersData }, { data: allAuthData }, { data: actsData }, { data: catsData }] = await Promise.all([
+      adminSupabase.from('tenant_users').select('user_id, user_email, role').eq('tenant_id', activeTenantId),
       adminSupabase.auth.admin.listUsers(),
-      actsQuery,
-      catsQuery,
+      adminSupabase.from('actions').select('*').order('created_at', { ascending: false }).eq('tenant_id', activeTenantId),
+      adminSupabase.from('categories').select('*').eq('tenant_id', activeTenantId),
     ]);
-    setUsers(usersData?.users || []);
+    // Filter auth users to only those belonging to this tenant
+    const tenantUserIds = new Set((tenantUsersData || []).map(u => u.user_id));
+    setUsers((allAuthData?.users || []).filter(u => tenantUserIds.has(u.id)));
     setActions(actsData || []);
     setCategories(catsData || []);
     setLoading(false);
   }, [selectedTenantId]);
 
   const loadLogs = useCallback(async () => {
+    if (!selectedTenantId) return;
     setLogsLoading(true);
-    let q = supabase.from('action_logs').select('*').order('created_at', { ascending: false }).limit(200);
-    if (selectedTenantId) q = q.eq('tenant_id', selectedTenantId);
-    const { data } = await q;
+    const { data } = await supabase.from('action_logs').select('*').order('created_at', { ascending: false }).limit(200).eq('tenant_id', selectedTenantId);
     setLogs(data || []);
     setLogsLoading(false);
   }, [selectedTenantId]);
@@ -278,7 +300,7 @@ export default function AdminDashboard() {
 
   async function createUser(e) {
     e.preventDefault();
-    if (!newEmail.trim()) return;
+    if (!newEmail.trim() || !selectedTenantId) return;
     setCreating(true);
     try {
       // Genereer automatisch een tijdelijk wachtwoord als het veld leeg is
@@ -292,8 +314,8 @@ export default function AdminDashboard() {
       });
       if (error) throw error;
 
-      // Add to selected tenant if one is selected
-      if (selectedTenantId && created?.user?.id) {
+      // Always link to current tenant
+      if (created?.user?.id) {
         await adminSupabase.from('tenant_users').insert([{
           tenant_id: selectedTenantId,
           user_id: created.user.id,
@@ -303,7 +325,7 @@ export default function AdminDashboard() {
       }
 
       // Stuur welkomstmail met tijdelijk wachtwoord (non-blocking)
-      sendWelcomeEmail({ to: newEmail.trim(), tempPassword: tempPw, name: newName.trim() })
+      sendWelcomeEmail({ to: newEmail.trim(), tempPassword: tempPw, name: newName.trim(), role: 'member', tenantName: activeTenant?.name || 'LEAGL' })
         .then(() => showToast(`Welkomstmail verstuurd naar ${newEmail.trim()}`))
         .catch(e => showToast(`Gebruiker aangemaakt maar mail mislukt: ${e.message}`, 'error'));
 
@@ -321,12 +343,11 @@ export default function AdminDashboard() {
     const { error } = await adminSupabase.auth.admin.deleteUser(userId);
     if (error) { showToast(error.message, 'error'); return; }
     // Flag open actions assigned to this user
-    let flagQuery = adminSupabase.from('actions')
+    await adminSupabase.from('actions')
       .update({ needs_reassignment: true })
       .eq('assigned_to_email', email)
-      .neq('status', 'Completed');
-    if (selectedTenantId) flagQuery = flagQuery.eq('tenant_id', selectedTenantId);
-    await flagQuery;
+      .neq('status', 'Completed')
+      .eq('tenant_id', selectedTenantId);
     showToast(`Gebruiker ${email} verwijderd — open acties gemarkeerd`);
     setUsers(prev => prev.filter(u => u.id !== userId));
     await loadData();
@@ -409,13 +430,17 @@ export default function AdminDashboard() {
 
   const STATUS_C = { 'Open': C.blue, 'In Progress': C.warning, 'Completed': C.success };
 
+  const activeTenant  = tenantsList.find(t => t.id === selectedTenantId) || null;
+  const brandName     = activeTenant?.name || 'LEAGL';
+  const accentColor   = activeTenant?.primary_color || C.accent;
+
   return (
     <div style={{ display: 'flex', height: '100vh', background: C.bg, overflow: 'hidden', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
 
       {/* ── Sidebar ── */}
       <div style={{ width: 220, background: '#0C0D10', borderRight: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.accent, letterSpacing: '0.12em' }}>LEAGL</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: accentColor, letterSpacing: '0.12em' }}>{brandName}</div>
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: 4 }}>Admin Panel</div>
         </div>
         <nav style={{ flex: 1, padding: '10px 10px' }}>
@@ -427,7 +452,7 @@ export default function AdminDashboard() {
                 onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.68)'; }}}
                 onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.40)'; }}}
               >
-                {isActive && <span style={{ position: 'absolute', left: 0, top: '22%', bottom: '22%', width: 3, background: C.accent, borderRadius: '0 3px 3px 0' }} />}
+                {isActive && <span style={{ position: 'absolute', left: 0, top: '22%', bottom: '22%', width: 3, background: accentColor, borderRadius: '0 3px 3px 0' }} />}
                 <span style={{ marginLeft: isActive ? 4 : 0 }}>{n.icon}</span>
                 {n.label}
               </div>
@@ -451,13 +476,12 @@ export default function AdminDashboard() {
         <div style={{ height: 56, background: C.surface, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{NAV.find(n => n.id === activeNav)?.label}</div>
-            {tenantsList.length > 0 && (
+            {tenantsList.length > 1 && (
               <select
                 value={selectedTenantId}
                 onChange={e => setSelectedTenantId(e.target.value)}
                 style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 10px', fontSize: 12, color: C.text, outline: 'none', cursor: 'pointer' }}
               >
-                <option value="">Alle tenants</option>
                 {tenantsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             )}
