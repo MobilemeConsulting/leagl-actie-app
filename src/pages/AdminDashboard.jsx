@@ -16,8 +16,9 @@ function genTempPassword() {
   return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
-async function sendWelcomeEmail({ to, tempPassword }) {
+async function sendWelcomeEmail({ to, tempPassword, name }) {
   if (!BREVO_KEY) { console.warn('VITE_BREVO_API_KEY not set — email skipped'); return; }
+  const displayName = name?.trim() || (to.split('@')[0].charAt(0).toUpperCase() + to.split('@')[0].slice(1));
   const html = `<!DOCTYPE html>
 <html lang="nl"><head><meta charset="UTF-8"><title>Welkom bij LEAGL Actie App</title></head>
 <body style="margin:0;padding:0;background:#F7F5F2;font-family:'Helvetica Neue',Arial,sans-serif;">
@@ -29,33 +30,53 @@ async function sendWelcomeEmail({ to, tempPassword }) {
           <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase;margin-top:4px;">Actie Platform</div>
         </td></tr>
         <tr><td style="padding:40px;">
-          <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#141210;">Welkom bij de Leagl Actie App!</h1>
-          <p style="margin:0 0 24px;font-size:14px;color:#8A8480;line-height:1.6;">Uw account is aangemaakt. Hieronder vindt u uw inloggegevens.</p>
-          <div style="background:#F0EDE8;border:1px solid #E4E1DC;border-radius:8px;padding:22px;margin-bottom:24px;">
-            <div style="font-size:11px;font-weight:700;color:#8A8480;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Uw inloggegevens</div>
+          <h1 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#141210;">Welkom bij de Leagl Actie App!</h1>
+          <p style="margin:0 0 16px;font-size:14px;color:#141210;line-height:1.7;">Beste ${displayName},</p>
+          <p style="margin:0 0 24px;font-size:14px;color:#5A5856;line-height:1.7;">We gaan vanaf nu onze team-acties bijhouden in onze nieuwe app. Geen losse mailtjes of papieren lijstjes meer, maar alles op één centrale plek.</p>
+
+          <div style="background:#F0EDE8;border:1px solid #E4E1DC;border-radius:8px;padding:20px 24px;margin-bottom:24px;">
+            <div style="font-size:12px;font-weight:700;color:#8A8480;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Wat kun je doen?</div>
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td style="font-size:13px;color:#8A8480;padding-bottom:8px;width:130px;">E-mailadres</td>
+                <td style="padding-bottom:12px;vertical-align:top;width:22px;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C8A96E;margin-top:5px;"></span></td>
+                <td style="padding-bottom:12px;font-size:13px;color:#141210;line-height:1.6;"><strong>Acties inzien:</strong> Je vindt je acties direct in de app of in je vertrouwde Outlook/Microsoft To Do lijst.</td>
+              </tr>
+              <tr>
+                <td style="padding-bottom:12px;vertical-align:top;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C8A96E;margin-top:5px;"></span></td>
+                <td style="padding-bottom:12px;font-size:13px;color:#141210;line-height:1.6;"><strong>Updates geven:</strong> Pas eenvoudig het groeipercentage aan zodat iedereen weet hoever je bent.</td>
+              </tr>
+              <tr>
+                <td style="vertical-align:top;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C8A96E;margin-top:5px;"></span></td>
+                <td style="font-size:13px;color:#141210;line-height:1.6;"><strong>Snel afvinken:</strong> Klaar? Eén klik op 'Afvinken' en de actie verdwijnt naar de historie.</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="background:#FFFFFF;border:1px solid #E4E1DC;border-radius:8px;padding:20px 24px;margin-bottom:20px;">
+            <div style="font-size:12px;font-weight:700;color:#8A8480;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Uw inloggegevens</div>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="font-size:13px;color:#8A8480;padding-bottom:8px;width:140px;">E-mailadres</td>
                 <td style="font-size:13px;font-weight:600;color:#141210;padding-bottom:8px;">${to}</td>
               </tr>
               <tr>
                 <td style="font-size:13px;color:#8A8480;">Tijdelijk wachtwoord</td>
-                <td><span style="font-size:18px;font-weight:800;color:#4263EB;letter-spacing:2px;font-family:monospace;">${tempPassword}</span></td>
+                <td><span style="font-size:17px;font-weight:800;color:#4263EB;letter-spacing:2px;font-family:monospace;">${tempPassword}</span></td>
               </tr>
             </table>
           </div>
-          <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:12px 16px;margin-bottom:24px;">
+
+          <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:12px 16px;margin-bottom:28px;">
             <p style="margin:0;font-size:13px;color:#92400E;line-height:1.5;">⚠ Bij uw eerste login wordt u gevraagd een nieuw persoonlijk wachtwoord in te stellen.</p>
           </div>
-          <div style="background:#EEF1FA;border:1px solid #C7D0EE;border-radius:8px;padding:14px;margin-bottom:24px;">
-            <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#4263EB;">Inlogopties</p>
-            <p style="margin:0;font-size:13px;color:#5A5856;line-height:1.6;">U kunt inloggen via <strong>e-mail &amp; wachtwoord</strong> of via <strong>Google / Microsoft SSO</strong>.</p>
-          </div>
-          <table cellpadding="0" cellspacing="0">
+
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
             <tr><td style="background:#4263EB;border-radius:8px;">
               <a href="${APP_URL}" style="display:block;padding:13px 28px;font-size:14px;font-weight:700;color:#FFFFFF;text-decoration:none;">Inloggen op Leagl Actie App →</a>
             </td></tr>
           </table>
+
+          <p style="margin:0;font-size:14px;color:#141210;line-height:1.7;">Succes!</p>
         </td></tr>
         <tr><td style="background:#F0EDE8;padding:18px 40px;border-top:1px solid #E4E1DC;">
           <p style="margin:0;font-size:11px;color:#8A8480;">© ${new Date().getFullYear()} LEAGL — Dit is een automatisch gegenereerde e-mail.</p>
@@ -71,7 +92,7 @@ async function sendWelcomeEmail({ to, tempPassword }) {
     body: JSON.stringify({
       sender: { name: 'LEAGL Actie App', email: SENDER },
       to: [{ email: to }],
-      subject: 'Welkom bij Leagl Actie App — uw account is actief',
+      subject: `Welkom bij de Leagl Actie App, ${displayName}!`,
       htmlContent: html,
     }),
   });
@@ -190,6 +211,7 @@ export default function AdminDashboard() {
 
   // Create user form
   const [newEmail, setNewEmail]   = useState('');
+  const [newName, setNewName]     = useState('');
   const [newPw, setNewPw]         = useState('');
   const [creating, setCreating]   = useState(false);
 
@@ -234,11 +256,11 @@ export default function AdminDashboard() {
       if (error) throw error;
 
       // Stuur welkomstmail met tijdelijk wachtwoord (non-blocking)
-      sendWelcomeEmail({ to: newEmail.trim(), tempPassword: tempPw })
+      sendWelcomeEmail({ to: newEmail.trim(), tempPassword: tempPw, name: newName.trim() })
         .then(() => showToast(`Welkomstmail verstuurd naar ${newEmail.trim()}`))
         .catch(e => showToast(`Gebruiker aangemaakt maar mail mislukt: ${e.message}`, 'error'));
 
-      setNewEmail(''); setNewPw('');
+      setNewEmail(''); setNewName(''); setNewPw('');
       await loadData();
     } catch (err) {
       showToast(err.message, 'error');
@@ -441,7 +463,12 @@ export default function AdminDashboard() {
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>Nieuwe gebruiker aanmaken</div>
                 <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>De gebruiker ontvangt automatisch een welkomstmail met tijdelijk wachtwoord. Bij eerste login wordt gevraagd een persoonlijk wachtwoord in te stellen.</div>
-                <form onSubmit={createUser} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+                <form onSubmit={createUser} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Naam</div>
+                    <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Jan Janssen"
+                      style={{ width: '100%', background: C.surface2, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: C.text, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                  </div>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>E-mailadres</div>
                     <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="collega@bedrijf.be" required
