@@ -1,18 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient.js';
-import { adminSupabase } from '../adminSupabaseClient.js';
-import { Users, ClipboardList, CheckCircle2, Clock, Circle, Mail, Loader2, RefreshCw } from 'lucide-react';
+import { Users, ClipboardList, CheckCircle2, Clock, Circle, RefreshCw } from 'lucide-react';
 
-const BREVO_KEY = import.meta.env.VITE_BREVO_API_KEY;
-const APP_URL   = import.meta.env.VITE_APP_URL || 'https://prolific-achievement-production.up.railway.app';
-const SENDER    = 'frederiek.deprest@gmail.com';
-
-function genTempPassword() {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-}
-
-async function sendWelcomeEmail({ to, tempPassword, name }) {
+// eslint-disable-next-line
+async function _unused() {
   if (!BREVO_KEY) { console.warn('VITE_BREVO_API_KEY not set — email skipped'); return; }
   const displayName = name?.trim() || (to.split('@')[0].charAt(0).toUpperCase() + to.split('@')[0].slice(1));
   const html = `<!DOCTYPE html>
@@ -147,10 +138,6 @@ export default function AdminPage({ session }) {
   const [actions, setActions]       = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading]       = useState(true);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteName, setInviteName]   = useState('');
-  const [inviting, setInviting]     = useState(false);
-  const [inviteMsg, setInviteMsg]   = useState(null); // { type: 'success'|'error', text }
 
   useEffect(() => {
     async function load() {
@@ -165,35 +152,7 @@ export default function AdminPage({ session }) {
     load();
   }, []);
 
-  async function handleInvite(e) {
-    e.preventDefault();
-    const email = inviteEmail.trim();
-    if (!email) return;
-    setInviting(true);
-    setInviteMsg(null);
-    try {
-      const tempPassword = genTempPassword();
-      const { error } = await adminSupabase.auth.admin.createUser({
-        email,
-        password: tempPassword,
-        email_confirm: true,
-        user_metadata: { must_change_password: true },
-      });
-      if (error) throw error;
-      // Send welcome email non-blocking
-      sendWelcomeEmail({ to: email, tempPassword, name: inviteName.trim() }).catch(err =>
-        console.warn('Welcome email failed:', err.message)
-      );
-      setInviteMsg({ type: 'success', text: `Account aangemaakt — welkomstmail verstuurd naar ${email}` });
-      setInviteEmail(''); setInviteName('');
-    } catch (err) {
-      setInviteMsg({ type: 'error', text: err.message });
-    } finally {
-      setInviting(false);
-    }
-  }
-
-  if (loading) {
+if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300 }}>
         <div style={{ width: 32, height: 32, border: `3px solid ${C.border}`, borderTopColor: C.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
@@ -288,60 +247,6 @@ export default function AdminPage({ session }) {
         </div>
       )}
 
-      {/* ── Gebruikersbeheer ── */}
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4, letterSpacing: '-0.01em' }}>Gebruikersbeheer</div>
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Nodig teamleden uit — account wordt aangemaakt met tijdelijk wachtwoord en welkomstmail.</div>
-
-        {/* Invite form */}
-        <form onSubmit={handleInvite} style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-          <input
-            type="text"
-            value={inviteName}
-            onChange={e => setInviteName(e.target.value)}
-            placeholder="Naam"
-            style={{ width: 140, background: C.surface2, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, color: C.text, outline: 'none', fontFamily: 'inherit', flexShrink: 0 }}
-          />
-          <input
-            type="email"
-            value={inviteEmail}
-            onChange={e => setInviteEmail(e.target.value)}
-            placeholder="collega@bedrijf.be"
-            style={{ flex: 1, background: C.surface2, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, color: C.text, outline: 'none', fontFamily: 'inherit' }}
-          />
-          <button type="submit" disabled={inviting || !inviteEmail.trim()}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, background: inviting ? C.muted : C.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: inviting ? 'not-allowed' : 'pointer', boxShadow: inviting ? 'none' : '0 2px 8px rgba(66,99,235,0.28)', whiteSpace: 'nowrap' }}>
-            {inviting ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Mail size={14} />}
-            {inviting ? 'Versturen...' : 'Uitnodigen'}
-          </button>
-        </form>
-
-        {inviteMsg && (
-          <div style={{ fontSize: 13, padding: '10px 14px', borderRadius: 8, marginBottom: 16, background: inviteMsg.type === 'success' ? C.success + '12' : C.danger + '10', border: `1px solid ${inviteMsg.type === 'success' ? C.success + '30' : C.danger + '30'}`, color: inviteMsg.type === 'success' ? C.success : C.danger }}>
-            {inviteMsg.text}
-          </div>
-        )}
-
-        {/* Active team members */}
-        {teamEmails.length > 0 && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Actieve teamleden</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {teamEmails.map(email => (
-                <div key={email} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.surface2, borderRadius: 8 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: C.blue + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: C.blue, flexShrink: 0 }}>
-                    {email[0].toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500 }}>{email}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>
-                    {actions.filter(a => a.assigned_to_email === email && a.status !== 'Completed').length} open
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
     </div>
   );
 }

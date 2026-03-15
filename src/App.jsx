@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, LogOut, ClipboardList, Loader2, CheckSquare, ListTodo, LayoutDashboard } from 'lucide-react';
+import { Plus, LogOut, ClipboardList, Loader2, CheckSquare, ListTodo, LayoutDashboard, Users } from 'lucide-react';
 import { supabase, signOut } from './supabaseClient.js';
 import { adminSupabase } from './adminSupabaseClient.js';
 import LoginPage from './components/LoginPage.jsx';
@@ -7,6 +7,7 @@ import ActionCard from './components/ActionCard.jsx';
 import ActionTable from './components/ActionTable.jsx';
 import ActionForm from './components/ActionForm.jsx';
 import AdminPage from './components/AdminPage.jsx';
+import TeamPage from './components/TeamPage.jsx';
 
 const BREVO_KEY = import.meta.env.VITE_BREVO_API_KEY;
 const APP_URL   = 'https://prolific-achievement-production.up.railway.app';
@@ -81,6 +82,7 @@ const NAV_ITEMS = [
   { id: 'open',   label: 'Actieve Acties',  icon: <ListTodo size={16} /> },
   { id: 'closed', label: 'Afgerond',         icon: <CheckSquare size={16} /> },
   { id: 'admin',  label: 'Stats',             icon: <LayoutDashboard size={16} /> },
+  { id: 'team',   label: 'Team',              icon: <Users size={16} /> },
 ];
 
 export default function App() {
@@ -286,7 +288,7 @@ export default function App() {
         <nav style={{ flex: 1, padding: '10px 10px', overflowY: 'auto' }}>
           {NAV_ITEMS.map(n => {
             const isActive = view === n.id;
-            const count = n.id === 'open' ? openCount : closedCount;
+            const count = n.id === 'open' ? openCount : n.id === 'closed' ? closedCount : null;
             return (
               <div key={n.id}
                 onClick={() => setView(n.id)}
@@ -312,7 +314,7 @@ export default function App() {
                 {isActive && <span style={{ position: 'absolute', left: 0, top: '22%', bottom: '22%', width: 3, background: COLORS.accent, borderRadius: '0 3px 3px 0' }} />}
                 <span style={{ fontSize: 14, opacity: isActive ? 1 : 0.75, marginLeft: isActive ? 4 : 0 }}>{n.icon}</span>
                 <span style={{ flex: 1 }}>{n.label}</span>
-                <span style={{ fontSize: 11, background: isActive ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)', color: isActive ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{count}</span>
+                {count !== null && <span style={{ fontSize: 11, background: isActive ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)', color: isActive ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{count}</span>}
               </div>
             );
           })}
@@ -356,13 +358,13 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ color: COLORS.muted }}>{currentNavItem?.icon}</span>
             <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', color: COLORS.text }}>{currentNavItem?.label}</div>
-            {view !== 'admin' && (
+            {view !== 'admin' && view !== 'team' && (
               <span style={{ fontSize: 12, color: COLORS.muted, background: COLORS.surface2, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '1px 9px', fontWeight: 500 }}>
                 {visibleActions.length}
               </span>
             )}
           </div>
-          {view !== 'admin' && (
+          {view !== 'admin' && view !== 'team' && (
             <button
               onClick={() => setShowForm(true)}
               style={{ display: 'flex', alignItems: 'center', gap: 7, background: COLORS.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(66,99,235,0.28)', transition: 'background 140ms ease' }}
@@ -378,13 +380,18 @@ export default function App() {
         {/* Scrollable content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px 12px' : '24px 28px' }}>
 
-          {/* Admin page */}
+          {/* Stats page */}
           {view === 'admin' && (
             <AdminPage session={session} />
           )}
 
+          {/* Team page */}
+          {view === 'team' && (
+            <TeamPage />
+          )}
+
           {/* Empty state */}
-          {view !== 'admin' && visibleActions.length === 0 && (
+          {view !== 'admin' && view !== 'team' && visibleActions.length === 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }} className="fade-in">
               <ClipboardList size={56} style={{ color: COLORS.border, marginBottom: 20 }} />
               <div style={{ fontSize: 18, fontWeight: 600, color: COLORS.text, marginBottom: 6 }}>
@@ -397,7 +404,7 @@ export default function App() {
           )}
 
           {/* Action list */}
-          {view !== 'admin' && visibleActions.length > 0 && (
+          {view !== 'admin' && view !== 'team' && visibleActions.length > 0 && (
             <div className="fade-in">
               {isMobile ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
