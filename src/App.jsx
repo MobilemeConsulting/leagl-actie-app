@@ -22,7 +22,7 @@ const COLORS = {
 const NAV_ITEMS = [
   { id: 'open',   label: 'Actieve Acties',  icon: <ListTodo size={16} /> },
   { id: 'closed', label: 'Afgerond',         icon: <CheckSquare size={16} /> },
-  { id: 'admin',  label: 'Admin & Stats',    icon: <LayoutDashboard size={16} /> },
+  { id: 'admin',  label: 'Stats',             icon: <LayoutDashboard size={16} /> },
 ];
 
 export default function App() {

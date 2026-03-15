@@ -1,6 +1,74 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient.js';
+import { adminSupabase } from '../adminSupabaseClient.js';
 import { Users, ClipboardList, CheckCircle2, Clock, Circle, Mail, Loader2, RefreshCw } from 'lucide-react';
+
+const BREVO_KEY = import.meta.env.VITE_BREVO_API_KEY;
+const APP_URL   = import.meta.env.VITE_APP_URL || 'https://prolific-achievement-production.up.railway.app';
+const SENDER    = 'frederiek.deprest@gmail.com';
+
+function genTempPassword() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+async function sendWelcomeEmail({ to, tempPassword }) {
+  if (!BREVO_KEY) { console.warn('VITE_BREVO_API_KEY not set — email skipped'); return; }
+  const html = `<!DOCTYPE html>
+<html lang="nl"><head><meta charset="UTF-8"><title>Welkom bij LEAGL Actie App</title></head>
+<body style="margin:0;padding:0;background:#F7F5F2;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F5F2;padding:40px 0;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0C0D10;padding:28px 40px;">
+          <div style="font-size:24px;font-weight:800;color:#C8A96E;letter-spacing:3px;">LEAGL</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase;margin-top:4px;">Actie Platform</div>
+        </td></tr>
+        <tr><td style="padding:40px;">
+          <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#141210;">Welkom bij de Leagl Actie App!</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#8A8480;line-height:1.6;">Uw account is aangemaakt. Hieronder vindt u uw inloggegevens.</p>
+          <div style="background:#F0EDE8;border:1px solid #E4E1DC;border-radius:8px;padding:22px;margin-bottom:24px;">
+            <div style="font-size:11px;font-weight:700;color:#8A8480;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Uw inloggegevens</div>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="font-size:13px;color:#8A8480;padding-bottom:8px;width:130px;">E-mailadres</td>
+                <td style="font-size:13px;font-weight:600;color:#141210;padding-bottom:8px;">${to}</td>
+              </tr>
+              <tr>
+                <td style="font-size:13px;color:#8A8480;">Tijdelijk wachtwoord</td>
+                <td><span style="font-size:18px;font-weight:800;color:#4263EB;letter-spacing:2px;font-family:monospace;">${tempPassword}</span></td>
+              </tr>
+            </table>
+          </div>
+          <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:12px 16px;margin-bottom:24px;">
+            <p style="margin:0;font-size:13px;color:#92400E;line-height:1.5;">⚠ Bij uw eerste login wordt u gevraagd een nieuw persoonlijk wachtwoord in te stellen.</p>
+          </div>
+          <table cellpadding="0" cellspacing="0">
+            <tr><td style="background:#4263EB;border-radius:8px;">
+              <a href="${APP_URL}" style="display:block;padding:13px 28px;font-size:14px;font-weight:700;color:#FFFFFF;text-decoration:none;">Inloggen op Leagl Actie App →</a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="background:#F0EDE8;padding:18px 40px;border-top:1px solid #E4E1DC;">
+          <p style="margin:0;font-size:11px;color:#8A8480;">© ${new Date().getFullYear()} LEAGL — Dit is een automatisch gegenereerde e-mail.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender: { name: 'LEAGL Actie App', email: SENDER },
+      to: [{ email: to }],
+      subject: 'Welkom bij Leagl Actie App — uw account is actief',
+      htmlContent: html,
+    }),
+  });
+  if (!res.ok) throw new Error(`Brevo fout ${res.status}`);
+}
 
 const C = {
   accent:   '#C8A96E',
@@ -73,17 +141,24 @@ export default function AdminPage({ session }) {
 
   async function handleInvite(e) {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    const email = inviteEmail.trim();
+    if (!email) return;
     setInviting(true);
     setInviteMsg(null);
     try {
-      // Send magic link — user clicks it and is instantly logged in
-      const { error } = await supabase.auth.signInWithOtp({
-        email: inviteEmail.trim(),
-        options: { shouldCreateUser: true },
+      const tempPassword = genTempPassword();
+      const { error } = await adminSupabase.auth.admin.createUser({
+        email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { must_change_password: true },
       });
       if (error) throw error;
-      setInviteMsg({ type: 'success', text: `Uitnodiging verstuurd naar ${inviteEmail.trim()}` });
+      // Send welcome email non-blocking
+      sendWelcomeEmail({ to: email, tempPassword }).catch(err =>
+        console.warn('Welcome email failed:', err.message)
+      );
+      setInviteMsg({ type: 'success', text: `Account aangemaakt — welkomstmail verstuurd naar ${email}` });
       setInviteEmail('');
     } catch (err) {
       setInviteMsg({ type: 'error', text: err.message });
@@ -190,7 +265,7 @@ export default function AdminPage({ session }) {
       {/* ── Gebruikersbeheer ── */}
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4, letterSpacing: '-0.01em' }}>Gebruikersbeheer</div>
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Nodig teamleden uit — zij ontvangen een magic link om direct in te loggen.</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Nodig teamleden uit — account wordt aangemaakt met tijdelijk wachtwoord en welkomstmail.</div>
 
         {/* Invite form */}
         <form onSubmit={handleInvite} style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
