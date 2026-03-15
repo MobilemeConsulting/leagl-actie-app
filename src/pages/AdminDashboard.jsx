@@ -1,0 +1,525 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { adminSupabase } from '../adminSupabaseClient.js';
+import {
+  Users, ClipboardList, CheckCircle2, Clock, Circle,
+  Plus, Trash2, Ban, RefreshCw, Download, Mail,
+  LayoutDashboard, ShieldCheck, Eye, EyeOff, LogOut,
+} from 'lucide-react';
+
+const C = {
+  accent:   '#C8A96E',
+  blue:     '#4263EB',
+  bg:       '#F7F5F2',
+  surface:  '#FFFFFF',
+  surface2: '#F0EDE8',
+  border:   '#E4E1DC',
+  text:     '#141210',
+  textSec:  '#5A5856',
+  muted:    '#8A8480',
+  success:  '#2D9E5A',
+  warning:  '#D97706',
+  danger:   '#E5383B',
+  purple:   '#7C3AED',
+};
+
+const NAV = [
+  { id: 'dashboard', label: 'Dashboard',       icon: <LayoutDashboard size={15} /> },
+  { id: 'users',     label: 'Gebruikers',       icon: <Users size={15} /> },
+  { id: 'actions',   label: 'Alle Acties',      icon: <ClipboardList size={15} /> },
+];
+
+function StatCard({ icon, label, value, color }) {
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+      <div style={{ width: 40, height: 40, borderRadius: 10, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>{icon}</div>
+      <div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>{value}</div>
+        <div style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function BarChart({ data, colorFn }) {
+  const max = Math.max(...data.map(d => d.value), 1);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+      {data.map((d, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 130, fontSize: 12, color: C.textSec, textAlign: 'right', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.label}>{d.label}</div>
+          <div style={{ flex: 1, height: 22, background: C.surface2, borderRadius: 5, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(d.value / max) * 100}%`, background: colorFn ? colorFn(i) : C.blue, borderRadius: 5, transition: 'width 600ms ease', minWidth: d.value > 0 ? 6 : 0 }} />
+          </div>
+          <div style={{ width: 24, fontSize: 12, fontWeight: 700, color: C.text, textAlign: 'right', flexShrink: 0 }}>{d.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Login gate ─────────────────────────────────────────────────────────
+function AdminLogin({ onAuth }) {
+  const [secret, setSecret] = useState('');
+  const [show, setShow]     = useState(false);
+  const [error, setError]   = useState('');
+
+  function handle(e) {
+    e.preventDefault();
+    if (secret === (import.meta.env.VITE_ADMIN_SECRET || '')) {
+      sessionStorage.setItem('admin_auth', '1');
+      onAuth();
+    } else {
+      setError('Onjuist admin wachtwoord.');
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0C0D10' }}>
+      <div style={{ background: C.surface, borderRadius: 16, padding: '44px 44px 40px', width: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.accent, letterSpacing: '0.12em', marginBottom: 4 }}>LEAGL</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Admin toegang</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 28 }}>Voer het admin wachtwoord in om door te gaan.</div>
+        <form onSubmit={handle}>
+          <div style={{ position: 'relative', marginBottom: 20 }}>
+            <input
+              type={show ? 'text' : 'password'}
+              value={secret}
+              onChange={e => setSecret(e.target.value)}
+              placeholder="Admin wachtwoord"
+              autoFocus
+              style={{ width: '100%', background: C.surface2, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: '12px 44px 12px 14px', fontSize: 14, color: C.text, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+            />
+            <button type="button" onClick={() => setShow(s => !s)}
+              style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0, display: 'flex' }}>
+              {show ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          {error && <div style={{ fontSize: 13, color: C.danger, marginBottom: 16, background: C.danger + '10', border: `1px solid ${C.danger}30`, borderRadius: 8, padding: '9px 14px' }}>{error}</div>}
+          <button type="submit"
+            style={{ width: '100%', background: C.blue, color: '#fff', border: 'none', borderRadius: 10, padding: '13px', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(66,99,235,0.28)' }}>
+            <ShieldCheck size={15} style={{ marginRight: 8, verticalAlign: 'middle' }} />
+            Toegang
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Main admin dashboard ───────────────────────────────────────────────
+export default function AdminDashboard() {
+  const [authed, setAuthed]       = useState(!!sessionStorage.getItem('admin_auth'));
+  const [activeNav, setActiveNav] = useState('dashboard');
+  const [users, setUsers]         = useState([]);
+  const [actions, setActions]     = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [toast, setToast]         = useState(null);
+
+  // Create user form
+  const [newEmail, setNewEmail]   = useState('');
+  const [newPw, setNewPw]         = useState('');
+  const [creating, setCreating]   = useState(false);
+
+  // Actions filter
+  const [actionFilter, setActionFilter] = useState('all');
+  const [actionSearch, setActionSearch] = useState('');
+
+  function showToast(msg, type = 'success') {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  }
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const [{ data: usersData }, { data: actsData }, { data: catsData }] = await Promise.all([
+      adminSupabase.auth.admin.listUsers(),
+      adminSupabase.from('actions').select('*').order('created_at', { ascending: false }),
+      adminSupabase.from('categories').select('*'),
+    ]);
+    setUsers(usersData?.users || []);
+    setActions(actsData || []);
+    setCategories(catsData || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { if (authed) loadData(); }, [authed]);
+
+  async function createUser(e) {
+    e.preventDefault();
+    if (!newEmail.trim() || !newPw.trim()) return;
+    setCreating(true);
+    try {
+      const { error } = await adminSupabase.auth.admin.createUser({
+        email: newEmail.trim(),
+        password: newPw.trim(),
+        email_confirm: true,
+      });
+      if (error) throw error;
+      showToast(`Gebruiker ${newEmail.trim()} aangemaakt`);
+      setNewEmail(''); setNewPw('');
+      await loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function deleteUser(userId, email) {
+    if (!window.confirm(`Gebruiker "${email}" definitief verwijderen?`)) return;
+    const { error } = await adminSupabase.auth.admin.deleteUser(userId);
+    if (error) { showToast(error.message, 'error'); return; }
+    showToast(`Gebruiker ${email} verwijderd`);
+    setUsers(prev => prev.filter(u => u.id !== userId));
+  }
+
+  async function toggleBan(user) {
+    const isBanned = !!user.banned_until;
+    const { error } = await adminSupabase.auth.admin.updateUserById(user.id, {
+      ban_duration: isBanned ? 'none' : '87600h', // 10 years = effectively permanent
+    });
+    if (error) { showToast(error.message, 'error'); return; }
+    showToast(isBanned ? `${user.email} geactiveerd` : `${user.email} gedeactiveerd`);
+    await loadData();
+  }
+
+  async function resetPassword(userId, email) {
+    const newPass = Math.random().toString(36).slice(-10) + 'A1!';
+    const { error } = await adminSupabase.auth.admin.updateUserById(userId, { password: newPass });
+    if (error) { showToast(error.message, 'error'); return; }
+    showToast(`Nieuw tijdelijk wachtwoord: ${newPass}`, 'info');
+  }
+
+  function exportCSV() {
+    const rows = actions.map(a => ({
+      id: a.id, subject: a.subject,
+      category: categories.find(c => c.id === a.category_id)?.name || '',
+      status: a.status, progress: a.percent_delivery,
+      due_date: a.due_date || '', assigned: a.assigned_to_email || '',
+      created: a.created_at, completed: a.completed_at || '',
+    }));
+    const keys = ['id','subject','category','status','progress','due_date','assigned','created','completed'];
+    const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = [keys.map(escape).join(','), ...rows.map(r => keys.map(k => escape(r[k])).join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `leagl-acties-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  if (!authed) return <AdminLogin onAuth={() => setAuthed(true)} />;
+
+  // Stats
+  const total      = actions.length;
+  const open       = actions.filter(a => a.status === 'Open').length;
+  const inProgress = actions.filter(a => a.status === 'In Progress').length;
+  const completed  = actions.filter(a => a.status === 'Completed').length;
+  const avgProg    = total > 0 ? Math.round(actions.reduce((s,a) => s + (a.percent_delivery||0), 0) / total) : 0;
+
+  const byCat = categories.map(cat => ({
+    label: cat.name,
+    value: actions.filter(a => a.category_id === cat.id).length,
+  })).filter(d => d.value > 0).sort((a,b) => b.value - a.value);
+
+  const byUser = Object.entries(
+    actions.reduce((acc, a) => {
+      const k = a.assigned_to_email || 'Niet toegewezen';
+      acc[k] = (acc[k] || 0) + 1; return acc;
+    }, {})
+  ).map(([label, value]) => ({ label, value })).sort((a,b) => b.value - a.value);
+
+  const catColors = ['#4263EB','#C8A96E','#2D9E5A','#7C3AED','#D97706','#E5383B','#0EA5E9'];
+
+  // Filtered actions
+  const filteredActions = actions.filter(a => {
+    const matchStatus = actionFilter === 'all' || a.status === actionFilter;
+    const q = actionSearch.toLowerCase();
+    const matchSearch = !q || a.subject?.toLowerCase().includes(q) || a.assigned_to_email?.toLowerCase().includes(q);
+    return matchStatus && matchSearch;
+  });
+
+  const formatDate = d => d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  const timeAgo = iso => {
+    const diff = (Date.now() - new Date(iso)) / 1000;
+    if (diff < 3600)  return `${Math.round(diff/60)}m geleden`;
+    if (diff < 86400) return `${Math.round(diff/3600)}u geleden`;
+    return `${Math.round(diff/86400)}d geleden`;
+  };
+
+  const STATUS_C = { 'Open': C.blue, 'In Progress': C.warning, 'Completed': C.success };
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', background: C.bg, overflow: 'hidden', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+
+      {/* ── Sidebar ── */}
+      <div style={{ width: 220, background: '#0C0D10', borderRight: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.accent, letterSpacing: '0.12em' }}>LEAGL</div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: 4 }}>Admin Panel</div>
+        </div>
+        <nav style={{ flex: 1, padding: '10px 10px' }}>
+          {NAV.map(n => {
+            const isActive = activeNav === n.id;
+            return (
+              <div key={n.id} onClick={() => setActiveNav(n.id)}
+                style={{ padding: '9px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, borderRadius: 8, marginBottom: 2, background: isActive ? 'rgba(255,255,255,0.09)' : 'transparent', color: isActive ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.40)', fontSize: 13.5, fontWeight: isActive ? 600 : 400, transition: 'all 140ms ease', position: 'relative', userSelect: 'none' }}
+                onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.68)'; }}}
+                onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.40)'; }}}
+              >
+                {isActive && <span style={{ position: 'absolute', left: 0, top: '22%', bottom: '22%', width: 3, background: C.accent, borderRadius: '0 3px 3px 0' }} />}
+                <span style={{ marginLeft: isActive ? 4 : 0 }}>{n.icon}</span>
+                {n.label}
+              </div>
+            );
+          })}
+        </nav>
+        <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.32)', textDecoration: 'none', transition: 'color 140ms' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.65)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.32)'}
+          >
+            <LogOut size={13} /> Terug naar app
+          </a>
+        </div>
+      </div>
+
+      {/* ── Main ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* Topbar */}
+        <div style={{ height: 56, background: C.surface, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', flexShrink: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{NAV.find(n => n.id === activeNav)?.label}</div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {activeNav === 'actions' && (
+              <button onClick={exportCSV}
+                style={{ display: 'flex', alignItems: 'center', gap: 7, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                <Download size={13} /> CSV Export
+              </button>
+            )}
+            <button onClick={loadData} disabled={loading}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, background: C.surface2, border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, padding: '7px 14px', fontSize: 12, cursor: 'pointer' }}>
+              <RefreshCw size={13} style={{ animation: loading ? 'spin 0.8s linear infinite' : 'none' }} />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}>
+
+          {/* ── DASHBOARD ── */}
+          {activeNav === 'dashboard' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
+                <StatCard icon={<ClipboardList size={18} />} label="Totaal acties"      value={total}        color={C.blue} />
+                <StatCard icon={<Circle size={18} />}        label="Open"               value={open}         color={C.blue} />
+                <StatCard icon={<Clock size={18} />}         label="In behandeling"     value={inProgress}   color={C.warning} />
+                <StatCard icon={<CheckCircle2 size={18} />}  label="Afgerond"           value={completed}    color={C.success} />
+                <StatCard icon={<RefreshCw size={18} />}     label="Gem. voortgang"     value={`${avgProg}%`} color={C.accent} />
+                <StatCard icon={<Users size={18} />}         label="Gebruikers"         value={users.length} color={C.purple} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16 }}>Per categorie</div>
+                  {byCat.length > 0 ? <BarChart data={byCat} colorFn={i => catColors[i % catColors.length]} /> : <div style={{ color: C.muted, fontSize: 13, textAlign: 'center', padding: '20px 0' }}>Geen data</div>}
+                </div>
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16 }}>Per persoon</div>
+                  {byUser.length > 0 ? <BarChart data={byUser} colorFn={() => C.blue} /> : <div style={{ color: C.muted, fontSize: 13, textAlign: 'center', padding: '20px 0' }}>Geen data</div>}
+                </div>
+              </div>
+
+              {total > 0 && (
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>Status verdeling</div>
+                  <div style={{ display: 'flex', height: 26, borderRadius: 7, overflow: 'hidden', gap: 2 }}>
+                    {open > 0       && <div style={{ flex: open,       background: C.blue,    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 700 }}>{Math.round(open/total*100)}%</div>}
+                    {inProgress > 0 && <div style={{ flex: inProgress, background: C.warning, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 700 }}>{Math.round(inProgress/total*100)}%</div>}
+                    {completed > 0  && <div style={{ flex: completed,  background: C.success, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 700 }}>{Math.round(completed/total*100)}%</div>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 20, marginTop: 10 }}>
+                    {[['Open', C.blue, open], ['In behandeling', C.warning, inProgress], ['Afgerond', C.success, completed]].map(([label, color, val]) => (
+                      <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: C.muted }}>
+                        <div style={{ width: 9, height: 9, borderRadius: 3, background: color }} /> {label} ({val})
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── USERS ── */}
+          {activeNav === 'users' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+              {/* Create user */}
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>Nieuwe gebruiker aanmaken</div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>De gebruiker ontvangt een tijdelijk wachtwoord en wordt gevraagd dit te wijzigen bij eerste login.</div>
+                <form onSubmit={createUser} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>E-mailadres</div>
+                    <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="collega@bedrijf.be" required
+                      style={{ width: '100%', background: C.surface2, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: C.text, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Tijdelijk wachtwoord</div>
+                    <input type="text" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Min. 8 tekens" required
+                      style={{ width: '100%', background: C.surface2, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: C.text, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                  </div>
+                  <button type="submit" disabled={creating}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, background: creating ? C.muted : C.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: creating ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', boxShadow: creating ? 'none' : '0 2px 8px rgba(66,99,235,0.24)' }}>
+                    <Plus size={14} /> {creating ? 'Aanmaken...' : 'Aanmaken'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Users table */}
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        {['E-mail', 'Provider', 'Aangemaakt', 'Laatste login', 'Status', 'Acties'].map(h => (
+                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map(user => {
+                        const isBanned = !!user.banned_until;
+                        const provider = user.app_metadata?.provider || 'email';
+                        return (
+                          <tr key={user.id} style={{ borderBottom: `1px solid ${C.border}` }}
+                            onMouseEnter={e => e.currentTarget.style.background = C.surface2}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <td style={{ padding: '10px 16px', color: C.text, fontWeight: 500 }}>{user.email}</td>
+                            <td style={{ padding: '10px 16px' }}>
+                              <span style={{ fontSize: 11, background: C.accent + '18', color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>
+                                {provider}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12 }}>{formatDate(user.created_at)}</td>
+                            <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12 }}>{user.last_sign_in_at ? timeAgo(user.last_sign_in_at) : '—'}</td>
+                            <td style={{ padding: '10px 16px' }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, background: isBanned ? C.danger + '12' : C.success + '12', color: isBanned ? C.danger : C.success, border: `1px solid ${isBanned ? C.danger + '30' : C.success + '30'}`, borderRadius: 6, padding: '2px 8px' }}>
+                                {isBanned ? 'Inactief' : 'Actief'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 16px' }}>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button onClick={() => toggleBan(user)} title={isBanned ? 'Activeren' : 'Deactiveren'}
+                                  style={{ background: isBanned ? C.success + '12' : C.warning + '12', border: `1px solid ${isBanned ? C.success + '30' : C.warning + '30'}`, color: isBanned ? C.success : C.warning, borderRadius: 6, padding: '5px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Ban size={12} /> {isBanned ? 'Activeer' : 'Deactiveer'}
+                                </button>
+                                {provider === 'email' && (
+                                  <button onClick={() => resetPassword(user.id, user.email)} title="Reset wachtwoord"
+                                    style={{ background: C.blue + '12', border: `1px solid ${C.blue}30`, color: C.blue, borderRadius: 6, padding: '5px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <RefreshCw size={12} /> Reset PW
+                                  </button>
+                                )}
+                                <button onClick={() => deleteUser(user.id, user.email)} title="Verwijderen"
+                                  style={{ background: C.danger + '10', border: `1px solid ${C.danger}30`, color: C.danger, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {users.length === 0 && !loading && (
+                    <div style={{ padding: '40px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Geen gebruikers gevonden</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── ALL ACTIONS ── */}
+          {activeNav === 'actions' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Filters */}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <input value={actionSearch} onChange={e => setActionSearch(e.target.value)} placeholder="Zoeken op onderwerp of persoon..."
+                  style={{ flex: 1, minWidth: 200, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 14px', fontSize: 13, color: C.text, outline: 'none', fontFamily: 'inherit' }} />
+                {['all', 'Open', 'In Progress', 'Completed'].map(s => (
+                  <button key={s} onClick={() => setActionFilter(s)}
+                    style={{ padding: '9px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1px solid ${actionFilter === s ? C.blue : C.border}`, background: actionFilter === s ? C.blue : C.surface, color: actionFilter === s ? '#fff' : C.muted, transition: 'all 140ms' }}>
+                    {s === 'all' ? 'Alle' : s === 'In Progress' ? 'In behandeling' : s}
+                  </button>
+                ))}
+              </div>
+
+              {/* Table */}
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        {['#', 'Onderwerp', 'Categorie', 'Status', 'Voortgang', 'Deadline', 'Toegewezen aan', 'Aangemaakt'].map(h => (
+                          <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredActions.map((action, i) => {
+                        const sc = STATUS_C[action.status] || C.muted;
+                        return (
+                          <tr key={action.id} style={{ borderBottom: `1px solid ${C.border}` }}
+                            onMouseEnter={e => e.currentTarget.style.background = C.surface2}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <td style={{ padding: '9px 14px', color: C.muted, fontFamily: 'monospace', fontSize: 11 }}>{i + 1}</td>
+                            <td style={{ padding: '9px 14px', maxWidth: 260 }}>
+                              <span style={{ fontWeight: 500, color: C.text, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{action.subject}</span>
+                            </td>
+                            <td style={{ padding: '9px 14px', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontSize: 11, background: C.accent + '18', color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 5, padding: '2px 7px', fontWeight: 600 }}>
+                                {categories.find(c => c.id === action.category_id)?.name || '—'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '9px 14px', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, background: sc + '12', color: sc, border: `1px solid ${sc}30`, borderRadius: 5, padding: '2px 7px' }}>{action.status}</span>
+                            </td>
+                            <td style={{ padding: '9px 14px', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <div style={{ width: 48, height: 4, background: C.surface2, borderRadius: 99, overflow: 'hidden' }}>
+                                  <div style={{ height: '100%', width: `${action.percent_delivery || 0}%`, background: C.blue, borderRadius: 99 }} />
+                                </div>
+                                <span style={{ fontSize: 11, color: C.muted }}>{action.percent_delivery || 0}%</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: '9px 14px', color: C.muted, fontSize: 12, whiteSpace: 'nowrap' }}>{formatDate(action.due_date)}</td>
+                            <td style={{ padding: '9px 14px', color: C.textSec, fontSize: 12, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{action.assigned_to_email || '—'}</td>
+                            <td style={{ padding: '9px 14px', color: C.muted, fontSize: 12, whiteSpace: 'nowrap' }}>{timeAgo(action.created_at)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {filteredActions.length === 0 && (
+                    <div style={{ padding: '40px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Geen acties gevonden</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, background: toast.type === 'error' ? C.danger : toast.type === 'info' ? C.blue : C.success, color: '#fff', borderRadius: 10, padding: '12px 20px', fontSize: 13, fontWeight: 600, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', maxWidth: 380 }}>
+          {toast.msg}
+        </div>
+      )}
+    </div>
+  );
+}
