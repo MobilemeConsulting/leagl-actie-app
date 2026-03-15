@@ -40,8 +40,16 @@ async function sendWelcomeEmail({ to, tempPassword, name }) {
               <tr><td style="font-size:13px;color:#8A8480;">Tijdelijk wachtwoord</td><td><span style="font-size:17px;font-weight:800;color:#4263EB;letter-spacing:2px;font-family:monospace;">${tempPassword}</span></td></tr>
             </table>
           </div>
+          <div style="background:#F0EDE8;border:1px solid #E4E1DC;border-radius:8px;padding:16px 20px;margin-bottom:16px;">
+            <div style="font-size:12px;font-weight:700;color:#8A8480;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Hoe inloggen?</div>
+            <p style="margin:0 0 8px;font-size:13px;color:#141210;line-height:1.6;">Je kunt inloggen op twee manieren:</p>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="vertical-align:top;width:22px;padding-top:2px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C8A96E;margin-top:5px;"></span></td><td style="font-size:13px;color:#141210;line-height:1.6;padding-bottom:8px;"><strong>E-mail + wachtwoord:</strong> gebruik het e-mailadres en tijdelijk wachtwoord hieronder.</td></tr>
+              <tr><td style="vertical-align:top;padding-top:2px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C8A96E;margin-top:5px;"></span></td><td style="font-size:13px;color:#141210;line-height:1.6;"><strong>Single Sign-On (SSO):</strong> log in met je bestaande Google- of Microsoft-account via de knop op de loginpagina — geen apart wachtwoord nodig.</td></tr>
+            </table>
+          </div>
           <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:12px 16px;margin-bottom:28px;">
-            <p style="margin:0;font-size:13px;color:#92400E;line-height:1.5;">⚠ Bij uw eerste login wordt u gevraagd een nieuw persoonlijk wachtwoord in te stellen.</p>
+            <p style="margin:0;font-size:13px;color:#92400E;line-height:1.5;">⚠ Logt u in met e-mail + wachtwoord? Bij uw eerste login wordt u gevraagd een nieuw persoonlijk wachtwoord in te stellen.</p>
           </div>
           <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
             <tr><td style="background:#4263EB;border-radius:8px;"><a href="${APP_URL}" style="display:block;padding:13px 28px;font-size:14px;font-weight:700;color:#FFFFFF;text-decoration:none;">Inloggen op Leagl Actie App →</a></td></tr>
