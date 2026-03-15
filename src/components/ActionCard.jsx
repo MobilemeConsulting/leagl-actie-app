@@ -83,11 +83,15 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
               <Calendar size={12} /> {formatDate(action.due_date)}
             </span>
           )}
-          {action.assigned_to_email && (
+          {action.needs_reassignment ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#D97706', fontWeight: 600 }}>
+              ⚠ Eigenaar ontbreekt
+            </span>
+          ) : action.assigned_to_email ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <User size={12} /> {action.assigned_to_email}
             </span>
-          )}
+          ) : null}
           {action.status === 'Completed' && action.completed_at && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#2D9E5A' }}>
               <CheckCircle2 size={12} /> Afgerond {formatDate(action.completed_at)}

@@ -3,8 +3,9 @@ import { adminSupabase } from '../adminSupabaseClient.js';
 import {
   Users, ClipboardList, CheckCircle2, Clock, Circle,
   Plus, Trash2, Ban, RefreshCw, Download, Mail,
-  LayoutDashboard, ShieldCheck, Eye, EyeOff, LogOut,
+  LayoutDashboard, ShieldCheck, Eye, EyeOff, LogOut, ScrollText,
 } from 'lucide-react';
+import { supabase } from '../supabaseClient.js';
 
 const BREVO_KEY  = import.meta.env.VITE_BREVO_API_KEY;
 const APP_URL    = import.meta.env.VITE_APP_URL || 'https://prolific-achievement-production.up.railway.app';
@@ -119,6 +120,7 @@ const NAV = [
   { id: 'dashboard', label: 'Dashboard',       icon: <LayoutDashboard size={15} /> },
   { id: 'users',     label: 'Gebruikers',       icon: <Users size={15} /> },
   { id: 'actions',   label: 'Alle Acties',      icon: <ClipboardList size={15} /> },
+  { id: 'logs',      label: 'Audit Log',        icon: <ScrollText size={15} /> },
 ];
 
 function StatCard({ icon, label, value, color }) {
@@ -219,6 +221,10 @@ export default function AdminDashboard() {
   const [actionFilter, setActionFilter] = useState('all');
   const [actionSearch, setActionSearch] = useState('');
 
+  // Logs
+  const [logs, setLogs]           = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+
   function showToast(msg, type = 'success') {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
@@ -237,7 +243,18 @@ export default function AdminDashboard() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { if (authed) loadData(); }, [authed]);
+  const loadLogs = useCallback(async () => {
+    setLogsLoading(true);
+    const { data } = await supabase
+      .from('action_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    setLogs(data || []);
+    setLogsLoading(false);
+  }, []);
+
+  useEffect(() => { if (authed) { loadData(); loadLogs(); } }, [authed]);
 
   async function createUser(e) {
     e.preventDefault();
@@ -270,11 +287,17 @@ export default function AdminDashboard() {
   }
 
   async function deleteUser(userId, email) {
-    if (!window.confirm(`Gebruiker "${email}" definitief verwijderen?`)) return;
+    if (!window.confirm(`Gebruiker "${email}" definitief verwijderen?\n\nOpen acties van deze persoon worden gemarkeerd als "Eigenaar ontbreekt".`)) return;
     const { error } = await adminSupabase.auth.admin.deleteUser(userId);
     if (error) { showToast(error.message, 'error'); return; }
-    showToast(`Gebruiker ${email} verwijderd`);
+    // Flag open actions assigned to this user
+    await adminSupabase.from('actions')
+      .update({ needs_reassignment: true })
+      .eq('assigned_to_email', email)
+      .neq('status', 'Completed');
+    showToast(`Gebruiker ${email} verwijderd — open acties gemarkeerd`);
     setUsers(prev => prev.filter(u => u.id !== userId));
+    await loadData();
   }
 
   async function toggleBan(user) {
@@ -617,6 +640,80 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── Logs tab ── */}
+          {activeNav === 'logs' && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Audit Log</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Alle wijzigingen aan acties — wie, wat en wanneer</div>
+                </div>
+                <button onClick={loadLogs} disabled={logsLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
+                  <RefreshCw size={13} style={{ animation: logsLoading ? 'spin 0.8s linear infinite' : 'none' }} /> Vernieuwen
+                </button>
+              </div>
+
+              {logsLoading ? (
+                <div style={{ textAlign: 'center', padding: '60px 0' }}>
+                  <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.accent, borderRadius: '50%', margin: '0 auto', animation: 'spin 0.8s linear infinite' }} />
+                </div>
+              ) : logs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 0', color: C.muted, fontSize: 13 }}>Nog geen log-entries. Wijzig een actie om te beginnen.</div>
+              ) : (
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr>
+                          {['Tijdstip', 'Door', 'Wijziging', 'Actie', 'Van', 'Naar'].map(h => (
+                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {logs.map((log, i) => {
+                          const typeColors = {
+                            'status':       C.blue,
+                            'voortgang':    C.accent,
+                            'aangemaakt':   C.success,
+                            'verwijderd':   C.danger,
+                            'toegewezen aan': '#7C3AED',
+                          };
+                          const typeColor = typeColors[log.change_type] || C.muted;
+                          return (
+                            <tr key={log.id} style={{ background: i % 2 === 0 ? C.surface : C.surface2 }}>
+                              <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', color: C.muted, fontSize: 12 }}>
+                                {new Date(log.created_at).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td style={{ padding: '10px 16px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: C.textSec, fontSize: 12 }} title={log.changed_by_email}>
+                                {log.changed_by_email}
+                              </td>
+                              <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, background: typeColor + '14', color: typeColor, border: `1px solid ${typeColor}30`, borderRadius: 5, padding: '2px 8px', textTransform: 'capitalize' }}>
+                                  {log.change_type}
+                                </span>
+                              </td>
+                              <td style={{ padding: '10px 16px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500, color: C.text }} title={log.action_subject}>
+                                {log.action_subject || '—'}
+                              </td>
+                              <td style={{ padding: '10px 16px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: C.muted, fontSize: 12 }} title={log.old_value}>
+                                {log.old_value || '—'}
+                              </td>
+                              <td style={{ padding: '10px 16px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: C.text, fontSize: 12, fontWeight: 500 }} title={log.new_value}>
+                                {log.new_value || '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

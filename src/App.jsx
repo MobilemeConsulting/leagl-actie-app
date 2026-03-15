@@ -141,6 +141,21 @@ export default function App() {
     if (!error) setCategories(data || []);
   }, []);
 
+  const writeLog = useCallback(async ({ actionId, actionSubject, changeType, oldValue, newValue }) => {
+    try {
+      await supabase.from('action_logs').insert([{
+        action_id: actionId,
+        action_subject: actionSubject,
+        changed_by_email: session?.user?.email || 'onbekend',
+        change_type: changeType,
+        old_value: oldValue ?? null,
+        new_value: newValue ?? null,
+      }]);
+    } catch (e) {
+      console.warn('Log schrijven mislukt:', e.message);
+    }
+  }, [session]);
+
   const loadUsers = useCallback(async () => {
     try {
       const { data } = await adminSupabase.auth.admin.listUsers({ perPage: 200 });
@@ -151,12 +166,12 @@ export default function App() {
   }, []);
 
   const handleCreateAction = async (formData) => {
-    const { error } = await supabase.from('actions').insert([formData]);
+    const { data, error } = await supabase.from('actions').insert([formData]).select().single();
     if (error) throw error;
     await loadActions();
     setShowForm(false);
     showToast('Actie aangemaakt');
-    // Send assignment notification (non-blocking)
+    writeLog({ actionId: data?.id, actionSubject: formData.subject, changeType: 'aangemaakt', newValue: `Toegewezen aan: ${formData.assigned_to_email || '—'}` });
     if (formData.assigned_to_email) {
       sendAssignmentEmail({
         to: formData.assigned_to_email,
@@ -174,16 +189,21 @@ export default function App() {
 
     const { error } = await supabase.from('actions').update(updates).eq('id', id);
     if (error) return;
+    const action = actions.find(a => a.id === id);
     setActions(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+    writeLog({ actionId: id, actionSubject: action?.subject, changeType: 'status', oldValue: action?.status, newValue: newStatus });
   };
 
   const handleUpdateProgress = async (id, newProgress) => {
+    const action = actions.find(a => a.id === id);
     const { error } = await supabase.from('actions').update({ percent_delivery: newProgress }).eq('id', id);
     if (error) return;
     setActions(prev => prev.map(a => a.id === id ? { ...a, percent_delivery: newProgress } : a));
+    writeLog({ actionId: id, actionSubject: action?.subject, changeType: 'voortgang', oldValue: `${action?.percent_delivery ?? 0}%`, newValue: `${newProgress}%` });
   };
 
   const handleUpdateAction = async (formData, id) => {
+    const old = actions.find(a => a.id === id);
     const updates = { ...formData };
     if (formData.status === 'Completed') updates.completed_at = new Date().toISOString();
     else updates.completed_at = null;
@@ -192,14 +212,34 @@ export default function App() {
     setActions(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
     setEditAction(null);
     showToast('Actie bijgewerkt');
+    // Log individual field changes
+    // Clear needs_reassignment flag when a new owner is assigned
+    if (formData.assigned_to_email && old?.needs_reassignment) {
+      updates.needs_reassignment = false;
+    }
+    const fields = [
+      { key: 'subject',           label: 'onderwerp' },
+      { key: 'status',            label: 'status' },
+      { key: 'assigned_to_email', label: 'toegewezen aan' },
+      { key: 'due_date',          label: 'deadline' },
+      { key: 'category_id',       label: 'categorie' },
+      { key: 'is_private',        label: 'privé' },
+    ];
+    fields.forEach(({ key, label }) => {
+      const ov = String(old?.[key] ?? '');
+      const nv = String(formData[key] ?? '');
+      if (ov !== nv) writeLog({ actionId: id, actionSubject: formData.subject, changeType: label, oldValue: ov || '—', newValue: nv || '—' });
+    });
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Weet je zeker dat je deze actie wilt verwijderen?')) return;
+    const action = actions.find(a => a.id === id);
     const { error } = await supabase.from('actions').delete().eq('id', id);
     if (error) return;
     setActions(prev => prev.filter(a => a.id !== id));
     showToast('Actie verwijderd', 'info');
+    writeLog({ actionId: id, actionSubject: action?.subject, changeType: 'verwijderd', oldValue: action?.status });
   };
 
   const handleSignOut = async () => {

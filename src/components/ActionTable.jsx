@@ -145,10 +145,17 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
       <td style={{ ...td, whiteSpace: 'nowrap', color: COLORS.textSecondary }}>{formatDate(action.due_date)}</td>
 
       {/* Assigned to */}
-      <td style={{ ...td, maxWidth: 160 }}>
-        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: COLORS.textSecondary }} title={action.assigned_to_email}>
-          {action.assigned_to_email || '—'}
-        </span>
+      <td style={{ ...td, maxWidth: 180 }}>
+        {action.needs_reassignment ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#D97706', background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.25)', borderRadius: 6, padding: '3px 8px' }}
+            title="Gebruiker verwijderd — wijs opnieuw toe via bewerken">
+            ⚠ Eigenaar ontbreekt
+          </span>
+        ) : (
+          <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: COLORS.textSecondary }} title={action.assigned_to_email}>
+            {action.assigned_to_email || '—'}
+          </span>
+        )}
       </td>
 
       {/* Private */}
