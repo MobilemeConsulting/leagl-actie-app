@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { signInWithGoogle, signInWithMicrosoft, signInWithEmail, updatePassword, supabase } from '../supabaseClient.js';
 
+// Check if logged-in user must change their password (set by admin on creation)
+function checkMustChangePassword(session) {
+  return session?.user?.user_metadata?.must_change_password === true;
+}
+
 const C = {
   accent:   '#C8A96E',
   blue:     '#4263EB',
@@ -50,17 +55,20 @@ export default function LoginPage() {
   const [ssoLoading, setSsoLoading]   = useState(false);
   const [error, setError]             = useState('');
 
-  // Password-setup screen (after invite link)
+  // Password-setup screen: na invite link OF na eerste login met temp password
   const [showPwSetup, setShowPwSetup]   = useState(needsPasswordSetup);
   const [newPw, setNewPw]               = useState('');
   const [confirmPw, setConfirmPw]       = useState('');
   const [pwLoading, setPwLoading]       = useState(false);
   const [pwError, setPwError]           = useState('');
 
-  // Handle Supabase OAuth callback for SSO providers
+  // Handle Supabase auth state — detecteer must_change_password na login
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') setSsoLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN') {
+        setSsoLoading(false);
+        if (checkMustChangePassword(session)) setShowPwSetup(true);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -86,9 +94,12 @@ export default function LoginPage() {
     setPwError('');
     setPwLoading(true);
     try {
-      await updatePassword(newPw);
+      // Update wachtwoord + clear must_change_password flag
+      await supabase.auth.updateUser({
+        password: newPw,
+        data: { must_change_password: false },
+      });
       setShowPwSetup(false);
-      // clear the hash so normal login renders
       window.history.replaceState(null, '', window.location.pathname);
     } catch (e) { setPwError(e.message); setPwLoading(false); }
   }
