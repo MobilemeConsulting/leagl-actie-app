@@ -1,6 +1,82 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { adminSupabase } from '../adminSupabaseClient.js';
-import { Plus, Trash2, Eye, EyeOff, LogOut, ShieldCheck, RefreshCw, Building2, Users, X } from 'lucide-react';
+import { Plus, Trash2, Eye, EyeOff, LogOut, ShieldCheck, RefreshCw, Building2, Users, X, UserPlus } from 'lucide-react';
+
+const BREVO_KEY = import.meta.env.VITE_BREVO_API_KEY;
+const APP_URL   = import.meta.env.VITE_APP_URL || 'https://leagl-actionlist.up.railway.app';
+const SENDER    = 'frederiek.deprest@gmail.com';
+
+function genTempPassword() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+async function sendWelcomeEmail({ to, tempPassword, name }) {
+  if (!BREVO_KEY) { console.warn('VITE_BREVO_API_KEY not set — email skipped'); return; }
+  const displayName = name?.trim() || (to.split('@')[0].charAt(0).toUpperCase() + to.split('@')[0].slice(1));
+  const html = `<!DOCTYPE html>
+<html lang="nl"><head><meta charset="UTF-8"><title>Welkom bij LEAGL Actie App</title></head>
+<body style="margin:0;padding:0;background:#F7F5F2;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F5F2;padding:40px 0;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0C0D10;padding:28px 40px;">
+          <div style="font-size:24px;font-weight:800;color:#C8A96E;letter-spacing:3px;">LEAGL</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase;margin-top:4px;">Actie Platform</div>
+        </td></tr>
+        <tr><td style="padding:40px;">
+          <h1 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#141210;">Welkom bij de Leagl Actie App!</h1>
+          <p style="margin:0 0 16px;font-size:14px;color:#141210;line-height:1.7;">Beste ${displayName},</p>
+          <p style="margin:0 0 10px;font-size:14px;color:#5A5856;line-height:1.7;">Om onze manier van werken scherper, transparanter en efficiënter te beheren, stappen we vandaag over naar een nieuwe manier van samenwerken via de Team Actions App.</p>
+          <p style="margin:0 0 10px;font-size:14px;color:#5A5856;line-height:1.7;">Geen versnipperde informatie meer in mailboxen of papieren actielijsten, maar één centrale <strong>single point of truth</strong>.</p>
+          <p style="margin:0 0 24px;font-size:14px;color:#5A5856;line-height:1.7;">Vanaf nu heb je altijd en overal real-time inzicht in lopende acties, deadlines en prioriteiten van alle leden van het team.</p>
+          <div style="background:#F0EDE8;border:1px solid #E4E1DC;border-radius:8px;padding:20px 24px;margin-bottom:24px;">
+            <div style="font-size:12px;font-weight:700;color:#8A8480;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Wat kun je doen?</div>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="padding-bottom:12px;vertical-align:top;width:22px;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C8A96E;margin-top:5px;"></span></td><td style="padding-bottom:12px;font-size:13px;color:#141210;line-height:1.6;"><strong>Acties inzien:</strong> Je vindt al je acties direct in de app.</td></tr>
+              <tr><td style="padding-bottom:12px;vertical-align:top;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C8A96E;margin-top:5px;"></span></td><td style="padding-bottom:12px;font-size:13px;color:#141210;line-height:1.6;"><strong>Updates geven:</strong> Pas eenvoudig het groeipercentage aan zodat iedereen weet hoever je bent.</td></tr>
+              <tr><td style="vertical-align:top;padding-top:1px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#C8A96E;margin-top:5px;"></span></td><td style="font-size:13px;color:#141210;line-height:1.6;"><strong>Snel afvinken:</strong> Klaar? Eén klik op 'Afvinken' en de actie verdwijnt naar de historie.</td></tr>
+            </table>
+          </div>
+          <div style="background:#FFFFFF;border:1px solid #E4E1DC;border-radius:8px;padding:20px 24px;margin-bottom:20px;">
+            <div style="font-size:12px;font-weight:700;color:#8A8480;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Uw inloggegevens</div>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="font-size:13px;color:#8A8480;padding-bottom:8px;width:140px;">E-mailadres</td><td style="font-size:13px;font-weight:600;color:#141210;padding-bottom:8px;">${to}</td></tr>
+              <tr><td style="font-size:13px;color:#8A8480;">Tijdelijk wachtwoord</td><td><span style="font-size:17px;font-weight:800;color:#4263EB;letter-spacing:2px;font-family:monospace;">${tempPassword}</span></td></tr>
+            </table>
+          </div>
+          <div style="background:#F0EDE8;border:1px solid #E4E1DC;border-radius:8px;padding:16px 20px;margin-bottom:16px;">
+            <div style="font-size:12px;font-weight:700;color:#8A8480;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Hoe inloggen?</div>
+            <p style="margin:0 0 12px;font-size:13px;color:#141210;line-height:1.6;">Je kunt inloggen met het e-mailadres en tijdelijk wachtwoord hierboven. Maar het mag ook eenvoudiger:</p>
+            <p style="margin:0;font-size:13px;color:#141210;line-height:1.6;background:#FFFFFF;border:1px solid #E4E1DC;border-radius:6px;padding:12px 14px;">💡 <strong>Single Sign-On (SSO):</strong> gebruikt jouw organisatie Office 365 op dit e-mailadres, of heb je een Google-account? Dan kan je op de loginpagina eenvoudig inloggen via de knop <em>"Doorgaan met Microsoft"</em> of <em>"Doorgaan met Google"</em> — zonder apart wachtwoord.</p>
+          </div>
+          <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:12px 16px;margin-bottom:28px;">
+            <p style="margin:0;font-size:13px;color:#92400E;line-height:1.5;">⚠ Logt u in met e-mail + wachtwoord? Bij uw eerste login wordt u gevraagd een nieuw persoonlijk wachtwoord in te stellen.</p>
+          </div>
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr><td style="background:#4263EB;border-radius:8px;"><a href="${APP_URL}" style="display:block;padding:13px 28px;font-size:14px;font-weight:700;color:#FFFFFF;text-decoration:none;">Inloggen op Leagl Actie App →</a></td></tr>
+          </table>
+          <p style="margin:0;font-size:14px;color:#141210;line-height:1.7;">Succes!</p>
+        </td></tr>
+        <tr><td style="background:#F0EDE8;padding:18px 40px;border-top:1px solid #E4E1DC;">
+          <p style="margin:0;font-size:11px;color:#8A8480;">© ${new Date().getFullYear()} LEAGL — Dit is een automatisch gegenereerde e-mail.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender: { name: 'LEAGL Actie App', email: SENDER },
+      to: [{ email: to }],
+      subject: `Welkom bij de Leagl Actie App, ${displayName}!`,
+      htmlContent: html,
+    }),
+  });
+  if (!res.ok) throw new Error(`Brevo fout ${res.status}`);
+}
 
 const C = {
   accent: '#C8A96E', blue: '#4263EB', bg: '#F7F5F2',
@@ -93,6 +169,12 @@ export default function SuperAdminDashboard() {
   const [addRole, setAddRole]                   = useState('member');
   const [adding, setAdding]                     = useState(false);
 
+  // New user creation
+  const [newName, setNewName]       = useState('');
+  const [newEmail, setNewEmail]     = useState('');
+  const [newRole, setNewRole]       = useState('member');
+  const [creating, setCreating]     = useState(false);
+
   function showToast(msg, type = 'success') {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
@@ -179,6 +261,37 @@ export default function SuperAdminDashboard() {
     if (error) { showToast(error.message, 'error'); return; }
     showToast(`${tu.user_email} verwijderd`);
     setTenantUsers(prev => prev.filter(u => u.id !== tu.id));
+  }
+
+  async function createAndAddUser(e) {
+    e.preventDefault();
+    if (!newEmail.trim() || !selectedTenantId) return;
+    setCreating(true);
+    try {
+      const tempPw = genTempPassword();
+      const { data: created, error } = await adminSupabase.auth.admin.createUser({
+        email: newEmail.trim(),
+        password: tempPw,
+        email_confirm: true,
+        user_metadata: { must_change_password: true },
+      });
+      if (error) throw error;
+      await adminSupabase.from('tenant_users').insert([{
+        tenant_id: selectedTenantId,
+        user_id: created.user.id,
+        user_email: newEmail.trim(),
+        role: newRole,
+      }]);
+      sendWelcomeEmail({ to: newEmail.trim(), tempPassword: tempPw, name: newName.trim() })
+        .then(() => showToast(`Welkomstmail verstuurd naar ${newEmail.trim()}`))
+        .catch(e => showToast(`Account aangemaakt maar mail mislukt: ${e.message}`, 'error'));
+      setNewName(''); setNewEmail(''); setNewRole('member');
+      await loadTenantUsers(selectedTenantId);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setCreating(false);
+    }
   }
 
   if (!authed) return <SALogin onAuth={() => setAuthed(true)} />;
@@ -326,8 +439,36 @@ export default function SuperAdminDashboard() {
 
               {selectedTenantId && (
                 <>
+                  {/* Nieuwe gebruiker aanmaken + koppelen */}
                   <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>Gebruiker toevoegen aan tenant</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>Nieuwe gebruiker aanmaken</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Account aanmaken, koppelen aan deze tenant en welkomstmail sturen — alles in één stap.</div>
+                    <form onSubmit={createAndAddUser} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 140px auto', gap: 10, alignItems: 'flex-end' }}>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Naam</div>
+                        <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Jan Janssen" style={inputStyle} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>E-mailadres</div>
+                        <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="collega@bedrijf.be" required style={inputStyle} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Rol</div>
+                        <select value={newRole} onChange={e => setNewRole(e.target.value)} style={inputStyle}>
+                          <option value="member">Member</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </div>
+                      <button type="submit" disabled={creating}
+                        style={{ display: 'flex', alignItems: 'center', gap: 7, background: creating ? C.muted : C.success, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: creating ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+                        <UserPlus size={14} /> {creating ? 'Aanmaken...' : 'Aanmaken + uitnodigen'}
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Bestaande gebruiker koppelen */}
+                  <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>Bestaande gebruiker toevoegen aan tenant</div>
                     <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>De gebruiker moet al bestaan in Supabase Auth.</div>
                     <form onSubmit={addUser} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                       <div style={{ flex: 1, minWidth: 220 }}>
