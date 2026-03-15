@@ -27,7 +27,7 @@ async function sendWelcomeEmail({ to, tempPassword, name }) {
         </td></tr>
         <tr><td style="padding:40px;">
           <h1 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#141210;">Welkom bij de Leagl Actie App!</h1>
-          <p style="margin:0 0 16px;font-size:14px;color:#141210;line-height:1.7;">Beste \${displayName},</p>
+          <p style="margin:0 0 16px;font-size:14px;color:#141210;line-height:1.7;">Beste ${displayName},</p>
           <p style="margin:0 0 24px;font-size:14px;color:#5A5856;line-height:1.7;">We gaan vanaf nu onze team-acties bijhouden in onze nieuwe app. Geen losse mailtjes of papieren lijstjes meer, maar alles op één centrale plek.</p>
 
           <div style="background:#F0EDE8;border:1px solid #E4E1DC;border-radius:8px;padding:20px 24px;margin-bottom:24px;">
