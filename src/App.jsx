@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, LogOut, ClipboardList, Loader2, CheckSquare, ListTodo } from 'lucide-react';
+import { Plus, LogOut, ClipboardList, Loader2, CheckSquare, ListTodo, LayoutDashboard } from 'lucide-react';
 import { supabase, signOut } from './supabaseClient.js';
 import LoginPage from './components/LoginPage.jsx';
 import ActionCard from './components/ActionCard.jsx';
 import ActionTable from './components/ActionTable.jsx';
 import ActionForm from './components/ActionForm.jsx';
+import AdminPage from './components/AdminPage.jsx';
 
 const COLORS = {
   accent: '#C8A96E',
@@ -21,6 +22,7 @@ const COLORS = {
 const NAV_ITEMS = [
   { id: 'open',   label: 'Actieve Acties',  icon: <ListTodo size={16} /> },
   { id: 'closed', label: 'Afgerond',         icon: <CheckSquare size={16} /> },
+  { id: 'admin',  label: 'Admin & Stats',    icon: <LayoutDashboard size={16} /> },
 ];
 
 export default function App() {
@@ -224,26 +226,35 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ color: COLORS.muted }}>{currentNavItem?.icon}</span>
             <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', color: COLORS.text }}>{currentNavItem?.label}</div>
-            <span style={{ fontSize: 12, color: COLORS.muted, background: COLORS.surface2, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '1px 9px', fontWeight: 500 }}>
-              {visibleActions.length}
-            </span>
+            {view !== 'admin' && (
+              <span style={{ fontSize: 12, color: COLORS.muted, background: COLORS.surface2, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '1px 9px', fontWeight: 500 }}>
+                {visibleActions.length}
+              </span>
+            )}
           </div>
-          <button
-            onClick={() => setShowForm(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, background: COLORS.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(66,99,235,0.28)', transition: 'background 140ms ease' }}
-            onMouseEnter={e => e.currentTarget.style.background = '#3451D1'}
-            onMouseLeave={e => e.currentTarget.style.background = COLORS.blue}
-          >
-            <Plus size={15} />
-            Nieuwe Actie
-          </button>
+          {view !== 'admin' && (
+            <button
+              onClick={() => setShowForm(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, background: COLORS.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(66,99,235,0.28)', transition: 'background 140ms ease' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#3451D1'}
+              onMouseLeave={e => e.currentTarget.style.background = COLORS.blue}
+            >
+              <Plus size={15} />
+              Nieuwe Actie
+            </button>
+          )}
         </div>
 
         {/* Scrollable content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px 12px' : '24px 28px' }}>
 
+          {/* Admin page */}
+          {view === 'admin' && (
+            <AdminPage session={session} />
+          )}
+
           {/* Empty state */}
-          {visibleActions.length === 0 && (
+          {view !== 'admin' && visibleActions.length === 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }} className="fade-in">
               <ClipboardList size={56} style={{ color: COLORS.border, marginBottom: 20 }} />
               <div style={{ fontSize: 18, fontWeight: 600, color: COLORS.text, marginBottom: 6 }}>
@@ -256,7 +267,7 @@ export default function App() {
           )}
 
           {/* Action list */}
-          {visibleActions.length > 0 && (
+          {view !== 'admin' && visibleActions.length > 0 && (
             <div className="fade-in">
               {isMobile ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
