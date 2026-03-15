@@ -225,19 +225,54 @@ function AdminLogin({ onAuth }) {
   );
 }
 
+// ── Tenant picker (shown once after login, locked for session) ──────────
+function AdminTenantPicker({ onPick }) {
+  const [tenants, setTenants] = useState([]);
+  useEffect(() => {
+    adminSupabase.from('tenants').select('*').order('name').then(({ data }) => setTenants(data || []));
+  }, []);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0C0D10' }}>
+      <div style={{ background: C.surface, borderRadius: 16, padding: '44px 44px 40px', width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.accent, letterSpacing: '0.12em', marginBottom: 4 }}>LEAGL</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Kies jouw organisatie</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 28 }}>Selecteer de tenant die je wil beheren.</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {tenants.map(t => (
+            <button key={t.id} onClick={() => onPick(t)}
+              style={{ display: 'flex', alignItems: 'center', gap: 14, background: C.surface2, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: '14px 18px', cursor: 'pointer', textAlign: 'left', transition: 'border-color 140ms' }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = t.primary_color || C.accent}
+              onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+            >
+              {t.logo_url
+                ? <img src={t.logo_url} alt={t.name} style={{ height: 28, width: 28, objectFit: 'contain', flexShrink: 0 }} />
+                : <div style={{ width: 28, height: 28, borderRadius: 6, background: (t.primary_color || C.accent) + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: t.primary_color || C.accent, flexShrink: 0 }}>{t.name[0]}</div>
+              }
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{t.name}</div>
+                <div style={{ fontSize: 11, color: C.muted }}>{t.slug}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main admin dashboard ───────────────────────────────────────────────
 export default function AdminDashboard() {
-  const [authed, setAuthed]       = useState(!!sessionStorage.getItem('admin_auth'));
-  const [activeNav, setActiveNav] = useState('dashboard');
-  const [users, setUsers]         = useState([]);
-  const [actions, setActions]     = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading]     = useState(false);
-  const [toast, setToast]         = useState(null);
+  const [authed, setAuthed]               = useState(!!sessionStorage.getItem('admin_auth'));
+  const [selectedTenantId, setSelectedTenantId] = useState(sessionStorage.getItem('admin_tenant_id') || '');
+  const [activeNav, setActiveNav]         = useState('dashboard');
+  const [users, setUsers]                 = useState([]);
+  const [actions, setActions]             = useState([]);
+  const [categories, setCategories]       = useState([]);
+  const [loading, setLoading]             = useState(false);
+  const [toast, setToast]                 = useState(null);
 
-  // Tenant selector
-  const [tenantsList, setTenantsList]           = useState([]);
-  const [selectedTenantId, setSelectedTenantId] = useState('');
+  // Tenant list only needed for the name/color lookup — not for selection
+  const [tenantsList, setTenantsList]     = useState([]);
 
   // Create user form
   const [newEmail, setNewEmail]   = useState('');
@@ -259,20 +294,11 @@ export default function AdminDashboard() {
   }
 
   const loadData = useCallback(async () => {
+    if (!selectedTenantId) return;
     setLoading(true);
-    // Load tenants list
+    // Load tenants list (for name/color in sidebar)
     const { data: tenantsData } = await adminSupabase.from('tenants').select('*').order('name');
     setTenantsList(tenantsData || []);
-
-    // Auto-select first tenant if none selected yet
-    const activeTenantId = selectedTenantId || tenantsData?.[0]?.id || '';
-    if (!selectedTenantId && activeTenantId) setSelectedTenantId(activeTenantId);
-
-    if (!activeTenantId) {
-      setUsers([]); setActions([]); setCategories([]);
-      setLoading(false);
-      return;
-    }
 
     const [{ data: tenantUsersData }, { data: allAuthData }, { data: actsData }, { data: catsData }] = await Promise.all([
       adminSupabase.from('tenant_users').select('user_id, user_email, role').eq('tenant_id', activeTenantId),
@@ -390,6 +416,10 @@ export default function AdminDashboard() {
   }
 
   if (!authed) return <AdminLogin onAuth={() => setAuthed(true)} />;
+  if (!selectedTenantId) return <AdminTenantPicker onPick={t => {
+    sessionStorage.setItem('admin_tenant_id', t.id);
+    setSelectedTenantId(t.id);
+  }} />;
 
   // Stats
   const total      = actions.length;
@@ -459,7 +489,14 @@ export default function AdminDashboard() {
             );
           })}
         </nav>
-        <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button onClick={() => { sessionStorage.removeItem('admin_tenant_id'); setSelectedTenantId(''); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.32)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, transition: 'color 140ms' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.65)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.32)'}
+          >
+            <RefreshCw size={13} /> Wissel organisatie
+          </button>
           <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.32)', textDecoration: 'none', transition: 'color 140ms' }}
             onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.65)'}
             onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.32)'}
@@ -476,15 +513,6 @@ export default function AdminDashboard() {
         <div style={{ height: 56, background: C.surface, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{NAV.find(n => n.id === activeNav)?.label}</div>
-            {tenantsList.length > 1 && (
-              <select
-                value={selectedTenantId}
-                onChange={e => setSelectedTenantId(e.target.value)}
-                style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 10px', fontSize: 12, color: C.text, outline: 'none', cursor: 'pointer' }}
-              >
-                {tenantsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            )}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             {activeNav === 'actions' && (
