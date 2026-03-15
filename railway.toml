@@ -3,5 +3,5 @@ builder = "nixpacks"
 buildCommand = "npm install && npm run build"
 
 [deploy]
-startCommand = "sh -c 'npx serve dist -s -l $PORT'"
+startCommand = "sh -c 'serve dist -s -l $PORT'"
 restartPolicyType = "on_failure"
