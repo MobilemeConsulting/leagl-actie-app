@@ -3,7 +3,7 @@ import { adminSupabase } from '../adminSupabaseClient.js';
 import {
   Users, ClipboardList, CheckCircle2, Clock, Circle,
   Plus, Trash2, Ban, RefreshCw, Download, Mail,
-  LayoutDashboard, ShieldCheck, Eye, EyeOff, LogOut, ScrollText,
+  LayoutDashboard, LogOut, ScrollText,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
 
@@ -176,54 +176,6 @@ function BarChart({ data, colorFn }) {
   );
 }
 
-// ── Login gate ─────────────────────────────────────────────────────────
-function AdminLogin({ onAuth }) {
-  const [secret, setSecret] = useState('');
-  const [show, setShow]     = useState(false);
-  const [error, setError]   = useState('');
-
-  function handle(e) {
-    e.preventDefault();
-    if (secret === (import.meta.env.VITE_ADMIN_SECRET || '')) {
-      sessionStorage.setItem('admin_auth', '1');
-      onAuth();
-    } else {
-      setError('Onjuist admin wachtwoord.');
-    }
-  }
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0C0D10' }}>
-      <div style={{ background: C.surface, borderRadius: 16, padding: '44px 44px 40px', width: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: C.accent, letterSpacing: '0.12em', marginBottom: 4 }}>LEAGL</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Admin toegang</div>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 28 }}>Voer het admin wachtwoord in om door te gaan.</div>
-        <form onSubmit={handle}>
-          <div style={{ position: 'relative', marginBottom: 20 }}>
-            <input
-              type={show ? 'text' : 'password'}
-              value={secret}
-              onChange={e => setSecret(e.target.value)}
-              placeholder="Admin wachtwoord"
-              autoFocus
-              style={{ width: '100%', background: C.surface2, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: '12px 44px 12px 14px', fontSize: 14, color: C.text, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
-            />
-            <button type="button" onClick={() => setShow(s => !s)}
-              style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0, display: 'flex' }}>
-              {show ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-          {error && <div style={{ fontSize: 13, color: C.danger, marginBottom: 16, background: C.danger + '10', border: `1px solid ${C.danger}30`, borderRadius: 8, padding: '9px 14px' }}>{error}</div>}
-          <button type="submit"
-            style={{ width: '100%', background: C.blue, color: '#fff', border: 'none', borderRadius: 10, padding: '13px', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(66,99,235,0.28)' }}>
-            <ShieldCheck size={15} style={{ marginRight: 8, verticalAlign: 'middle' }} />
-            Toegang
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
 
 // ── Scoped tenant picker (only tenants the user belongs to) ─────────────
 function AdminTenantPicker({ tenants, onPick }) {
@@ -258,10 +210,9 @@ function AdminTenantPicker({ tenants, onPick }) {
 
 // ── Main admin dashboard ───────────────────────────────────────────────
 export default function AdminDashboard() {
-  const [authed, setAuthed]               = useState(!!sessionStorage.getItem('admin_auth'));
   const [selectedTenantId, setSelectedTenantId] = useState('');
-  // tenants the current user belongs to (resolved from Supabase session)
-  const [userTenants, setUserTenants]     = useState(null); // null = loading, [] = no access
+  // null = loading, [] = not logged in or no admin role
+  const [userTenants, setUserTenants]     = useState(null);
   const [activeNav, setActiveNav]         = useState('dashboard');
   const [users, setUsers]                 = useState([]);
   const [actions, setActions]             = useState([]);
@@ -289,20 +240,20 @@ export default function AdminDashboard() {
     setTimeout(() => setToast(null), 3500);
   }
 
-  // After admin password gate: resolve which tenant(s) this user belongs to
+  // Resolve admin tenants from Supabase session on mount
   useEffect(() => {
-    if (!authed) return;
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { setUserTenants([]); return; }
       const { data: memberships } = await adminSupabase
         .from('tenant_users')
-        .select('tenant_id, tenants(id, slug, name, logo_url, primary_color)')
-        .eq('user_id', session.user.id);
+        .select('tenant_id, role, tenants(id, slug, name, logo_url, primary_color)')
+        .eq('user_id', session.user.id)
+        .eq('role', 'admin');
       const tenants = (memberships || []).map(m => m.tenants).filter(Boolean);
       setUserTenants(tenants);
       if (tenants.length === 1) setSelectedTenantId(tenants[0].id);
     });
-  }, [authed]);
+  }, []);
 
   const loadData = useCallback(async () => {
     if (!selectedTenantId) return;
@@ -424,28 +375,26 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(a.href);
   }
 
-  if (!authed) return <AdminLogin onAuth={() => setAuthed(true)} />;
-
-  // Resolving tenant from Supabase session
+  // Loading session
   if (userTenants === null) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0C0D10' }}>
       <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: C.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
     </div>
   );
 
-  // Not logged in to Supabase
+  // Not logged in, or no admin role on any tenant
   if (userTenants.length === 0) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0C0D10' }}>
-      <div style={{ background: C.surface, borderRadius: 16, padding: '44px', width: 400, textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+      <div style={{ background: C.surface, borderRadius: 16, padding: '44px', width: 420, textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: C.accent, letterSpacing: '0.12em', marginBottom: 16 }}>LEAGL</div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 10 }}>Niet ingelogd</div>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Log eerst in op de app en kom dan terug naar /admin.</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 10 }}>Geen toegang</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Je hebt geen beheerdersrol. Log in met een account dat admin-rechten heeft, of vraag je beheerder om toegang.</div>
         <a href="/" style={{ display: 'inline-block', background: C.blue, color: '#fff', textDecoration: 'none', borderRadius: 8, padding: '10px 22px', fontSize: 13, fontWeight: 600 }}>Naar inlogpagina →</a>
       </div>
     </div>
   );
 
-  // Multiple tenants → scoped picker
+  // Multiple admin tenants → scoped picker
   if (!selectedTenantId) return <AdminTenantPicker tenants={userTenants} onPick={id => setSelectedTenantId(id)} />;
 
   // Stats
