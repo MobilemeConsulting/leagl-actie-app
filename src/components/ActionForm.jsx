@@ -17,7 +17,7 @@ const COLORS = {
 const label = { fontSize: 11, fontWeight: 600, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 };
 const input = { width: '100%', background: COLORS.surface2, border: `1.5px solid ${COLORS.border}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: COLORS.text, outline: 'none', boxSizing: 'border-box' };
 
-export default function ActionForm({ categories, onSave, onCancel, session, onCategoryCreated }) {
+export default function ActionForm({ categories, users = [], onSave, onCancel, session, onCategoryCreated }) {
   const { syncToMicrosoftToDo } = useMicrosoftSync();
 
   const [subject, setSubject]                   = useState('');
@@ -139,9 +139,26 @@ export default function ActionForm({ categories, onSave, onCancel, session, onCa
 
           {/* Assigned to */}
           <div>
-            <label style={label}>Toegewezen aan (e-mail)</label>
-            <input type="email" value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
-              placeholder="naam@voorbeeld.nl" style={input} />
+            <label style={label}>Toegewezen aan</label>
+            {users.length > 0 ? (
+              <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
+                style={{ ...input, cursor: 'pointer' }}>
+                <option value="">— Niet toegewezen —</option>
+                {/* Current user first */}
+                {session?.user?.email && (
+                  <option value={session.user.email}>{session.user.email} (jij)</option>
+                )}
+                {users
+                  .filter(u => u.email !== session?.user?.email)
+                  .map(u => (
+                    <option key={u.id} value={u.email}>{u.email}</option>
+                  ))
+                }
+              </select>
+            ) : (
+              <input type="email" value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
+                placeholder="naam@voorbeeld.nl" style={input} />
+            )}
           </div>
 
           {/* Private */}

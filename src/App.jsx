@@ -1,11 +1,69 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, LogOut, ClipboardList, Loader2, CheckSquare, ListTodo, LayoutDashboard } from 'lucide-react';
 import { supabase, signOut } from './supabaseClient.js';
+import { adminSupabase } from './adminSupabaseClient.js';
 import LoginPage from './components/LoginPage.jsx';
 import ActionCard from './components/ActionCard.jsx';
 import ActionTable from './components/ActionTable.jsx';
 import ActionForm from './components/ActionForm.jsx';
 import AdminPage from './components/AdminPage.jsx';
+
+const BREVO_KEY = import.meta.env.VITE_BREVO_API_KEY;
+const APP_URL   = 'https://prolific-achievement-production.up.railway.app';
+const SENDER    = 'frederiek.deprest@gmail.com';
+
+async function sendAssignmentEmail({ to, subject, dueDate, assignedByEmail }) {
+  if (!to || !BREVO_KEY) return;
+  const dueLine = dueDate
+    ? `<tr><td style="font-size:13px;color:#8A8480;padding-bottom:8px;width:110px;">Deadline</td><td style="font-size:13px;font-weight:600;color:#141210;">${new Date(dueDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long', year: 'numeric' })}</td></tr>`
+    : '';
+  const html = `<!DOCTYPE html>
+<html lang="nl"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#F7F5F2;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F5F2;padding:40px 0;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0C0D10;padding:24px 40px;">
+          <div style="font-size:22px;font-weight:800;color:#C8A96E;letter-spacing:3px;">LEAGL</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase;margin-top:4px;">Actie Platform</div>
+        </td></tr>
+        <tr><td style="padding:36px 40px;">
+          <h1 style="margin:0 0 6px;font-size:18px;font-weight:700;color:#141210;">Nieuwe actie toegewezen aan jou</h1>
+          <p style="margin:0 0 24px;font-size:13px;color:#8A8480;">Toegewezen door <strong>${assignedByEmail}</strong></p>
+          <div style="background:#F0EDE8;border:1px solid #E4E1DC;border-radius:8px;padding:20px;margin-bottom:24px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="font-size:13px;color:#8A8480;padding-bottom:8px;width:110px;">Actie</td>
+                <td style="font-size:13px;font-weight:600;color:#141210;padding-bottom:8px;">${subject}</td>
+              </tr>
+              ${dueLine}
+            </table>
+          </div>
+          <table cellpadding="0" cellspacing="0">
+            <tr><td style="background:#4263EB;border-radius:8px;">
+              <a href="${APP_URL}" style="display:block;padding:12px 26px;font-size:14px;font-weight:700;color:#FFFFFF;text-decoration:none;">Bekijk in Leagl →</a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="background:#F0EDE8;padding:16px 40px;border-top:1px solid #E4E1DC;">
+          <p style="margin:0;font-size:11px;color:#8A8480;">© ${new Date().getFullYear()} LEAGL — Automatische notificatie</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender: { name: 'LEAGL Actie App', email: SENDER },
+      to: [{ email: to }],
+      subject: `Nieuwe actie: ${subject}`,
+      htmlContent: html,
+    }),
+  });
+}
 
 const COLORS = {
   accent: '#C8A96E',
@@ -29,6 +87,7 @@ export default function App() {
   const [session, setSession]       = useState(null);
   const [actions, setActions]       = useState([]);
   const [categories, setCategories] = useState([]);
+  const [users, setUsers]           = useState([]);
   const [loading, setLoading]       = useState(true);
   const [view, setView]             = useState('open');
   const [showForm, setShowForm]     = useState(false);
@@ -56,6 +115,7 @@ export default function App() {
     if (session) {
       loadActions();
       loadCategories();
+      loadUsers();
     }
   }, [session]);
 
@@ -80,12 +140,30 @@ export default function App() {
     if (!error) setCategories(data || []);
   }, []);
 
+  const loadUsers = useCallback(async () => {
+    try {
+      const { data } = await adminSupabase.auth.admin.listUsers({ perPage: 200 });
+      setUsers((data?.users || []).filter(u => u.email).map(u => ({ id: u.id, email: u.email })));
+    } catch (e) {
+      console.warn('Could not load users:', e.message);
+    }
+  }, []);
+
   const handleCreateAction = async (formData) => {
     const { error } = await supabase.from('actions').insert([formData]);
     if (error) throw error;
     await loadActions();
     setShowForm(false);
     showToast('Actie aangemaakt');
+    // Send assignment notification (non-blocking)
+    if (formData.assigned_to_email) {
+      sendAssignmentEmail({
+        to: formData.assigned_to_email,
+        subject: formData.subject,
+        dueDate: formData.due_date,
+        assignedByEmail: session?.user?.email || 'een collega',
+      }).catch(e => console.warn('Assignment email failed:', e.message));
+    }
   };
 
   const handleUpdateStatus = async (id, newStatus) => {
@@ -300,6 +378,7 @@ export default function App() {
       {showForm && (
         <ActionForm
           categories={categories}
+          users={users}
           onSave={handleCreateAction}
           onCancel={() => setShowForm(false)}
           session={session}
