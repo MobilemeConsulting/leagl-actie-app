@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, RefreshCw, Lock } from 'lucide-react';
+import { Trash2, RefreshCw, Lock, Pencil } from 'lucide-react';
 
 const COLORS = {
   surface: '#FFFFFF',
@@ -21,7 +21,7 @@ const STATUS_COLOR = {
   'Completed':   { color: COLORS.success, bg: 'rgba(45,158,90,0.08)',  border: 'rgba(45,158,90,0.20)'  },
 };
 
-export default function ActionTable({ actions, categories, onStatusChange, onProgressChange, onDelete }) {
+export default function ActionTable({ actions, categories, onStatusChange, onProgressChange, onDelete, onEdit }) {
   const hasCompleted = actions.some(a => a.status === 'Completed');
 
   const getCategoryName = (id) => categories.find(c => c.id === id)?.name ?? '—';
@@ -64,6 +64,7 @@ export default function ActionTable({ actions, categories, onStatusChange, onPro
                 onStatusChange={onStatusChange}
                 onProgressChange={onProgressChange}
                 onDelete={onDelete}
+                onEdit={onEdit}
               />
             ))}
           </tbody>
@@ -73,7 +74,7 @@ export default function ActionTable({ actions, categories, onStatusChange, onPro
   );
 }
 
-function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate, onStatusChange, onProgressChange, onDelete }) {
+function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate, onStatusChange, onProgressChange, onDelete, onEdit }) {
   const [localProgress, setLocalProgress] = React.useState(action.percent_delivery ?? 0);
   const [hovered, setHovered] = React.useState(false);
 
@@ -173,8 +174,17 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
         </td>
       )}
 
-      {/* Delete */}
-      <td style={{ ...td, textAlign: 'center' }}>
+      {/* Edit + Delete */}
+      <td style={{ ...td, textAlign: 'center', whiteSpace: 'nowrap' }}>
+        <button
+          onClick={() => onEdit(action)}
+          style={{ background: 'none', border: 'none', padding: '5px', borderRadius: 6, color: COLORS.muted, cursor: 'pointer', display: 'inline-flex', transition: 'color 140ms ease', marginRight: 4 }}
+          onMouseEnter={e => e.currentTarget.style.color = COLORS.blue}
+          onMouseLeave={e => e.currentTarget.style.color = COLORS.muted}
+          title="Bewerk actie"
+        >
+          <Pencil size={15} />
+        </button>
         <button
           onClick={() => onDelete(action.id)}
           style={{ background: 'none', border: 'none', padding: '5px', borderRadius: 6, color: COLORS.muted, cursor: 'pointer', display: 'inline-flex', transition: 'color 140ms ease' }}

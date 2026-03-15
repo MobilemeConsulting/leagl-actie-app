@@ -17,16 +17,17 @@ const COLORS = {
 const label = { fontSize: 11, fontWeight: 600, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 };
 const input = { width: '100%', background: COLORS.surface2, border: `1.5px solid ${COLORS.border}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: COLORS.text, outline: 'none', boxSizing: 'border-box' };
 
-export default function ActionForm({ categories, users = [], onSave, onCancel, session, onCategoryCreated }) {
+export default function ActionForm({ categories, users = [], onSave, onCancel, session, onCategoryCreated, editAction = null }) {
   const { syncToMicrosoftToDo } = useMicrosoftSync();
+  const isEdit = editAction !== null;
 
-  const [subject, setSubject]                   = useState('');
-  const [categoryId, setCategoryId]             = useState(null);
-  const [status, setStatus]                     = useState('Open');
-  const [percentDelivery, setPercentDelivery]   = useState(0);
-  const [dueDate, setDueDate]                   = useState('');
-  const [assignedTo, setAssignedTo]             = useState(session?.user?.email ?? '');
-  const [isPrivate, setIsPrivate]               = useState(false);
+  const [subject, setSubject]                   = useState(editAction?.subject ?? '');
+  const [categoryId, setCategoryId]             = useState(editAction?.category_id ?? null);
+  const [status, setStatus]                     = useState(editAction?.status ?? 'Open');
+  const [percentDelivery, setPercentDelivery]   = useState(editAction?.percent_delivery ?? 0);
+  const [dueDate, setDueDate]                   = useState(editAction?.due_date?.slice(0, 10) ?? '');
+  const [assignedTo, setAssignedTo]             = useState(editAction?.assigned_to_email ?? session?.user?.email ?? '');
+  const [isPrivate, setIsPrivate]               = useState(editAction?.is_private ?? false);
   const [saving, setSaving]                     = useState(false);
   const [error, setError]                       = useState(null);
 
@@ -55,11 +56,13 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
     };
 
     try {
-      await onSave(formData);
-      const providerToken = session?.provider_token;
-      if (providerToken) {
-        try { await syncToMicrosoftToDo(formData, providerToken); }
-        catch (syncErr) { console.warn('MS To Do sync failed (non-fatal):', syncErr.message); }
+      await onSave(formData, isEdit ? editAction.id : null);
+      if (!isEdit) {
+        const providerToken = session?.provider_token;
+        if (providerToken) {
+          try { await syncToMicrosoftToDo(formData, providerToken); }
+          catch (syncErr) { console.warn('MS To Do sync failed (non-fatal):', syncErr.message); }
+        }
       }
     } catch (err) {
       setError('Opslaan mislukt. Probeer het opnieuw.');
@@ -75,7 +78,7 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
       <div className="modal-in" style={{ background: COLORS.surface, width: '100%', maxWidth: 520, borderRadius: '20px 20px 0 0', boxShadow: '0 -8px 40px rgba(0,0,0,0.16)', maxHeight: '90vh', overflowY: 'auto' }}>
         {/* Header */}
         <div style={{ position: 'sticky', top: 0, background: COLORS.surface, borderBottom: `1px solid ${COLORS.border}`, padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '20px 20px 0 0', zIndex: 1 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.text, letterSpacing: '-0.01em' }}>Nieuwe actie</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.text, letterSpacing: '-0.01em' }}>{isEdit ? 'Actie bewerken' : 'Nieuwe actie'}</div>
           <button
             onClick={onCancel}
             style={{ background: COLORS.surface2, border: 'none', borderRadius: 8, padding: '6px', color: COLORS.muted, cursor: 'pointer', display: 'flex', transition: 'background 140ms ease' }}
@@ -183,7 +186,7 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
               style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', background: saving ? '#8A8480' : COLORS.blue, color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', boxShadow: saving ? 'none' : '0 2px 8px rgba(66,99,235,0.28)' }}
             >
               {saving ? <Loader2 size={15} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Save size={15} />}
-              {saving ? 'Opslaan...' : 'Opslaan'}
+              {saving ? 'Opslaan...' : isEdit ? 'Wijzigingen opslaan' : 'Opslaan'}
             </button>
           </div>
         </form>

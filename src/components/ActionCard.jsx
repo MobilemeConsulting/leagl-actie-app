@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, User, Lock, Trash2, ChevronRight, CheckCircle2, Clock, Circle } from 'lucide-react';
+import { Calendar, User, Lock, Trash2, Pencil, ChevronRight, CheckCircle2, Clock, Circle } from 'lucide-react';
 
 const STATUS_SEQUENCE = ['Open', 'In Progress', 'Completed'];
 
@@ -19,7 +19,7 @@ const COLORS = {
   danger: '#E5383B',
 };
 
-export default function ActionCard({ action, categories, onStatusChange, onProgressChange, onDelete }) {
+export default function ActionCard({ action, categories, onStatusChange, onProgressChange, onDelete, onEdit }) {
   const [localProgress, setLocalProgress] = useState(action.percent_delivery ?? 0);
 
   const cfg = STATUS_CONFIG[action.status] || STATUS_CONFIG['Open'];
@@ -46,6 +46,15 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {action.is_private && <Lock size={14} style={{ color: COLORS.muted }} title="Privé actie" />}
+          <button
+            onClick={() => onEdit(action)}
+            style={{ background: 'none', border: 'none', padding: '4px', borderRadius: 6, color: COLORS.muted, cursor: 'pointer', display: 'flex', transition: 'color 140ms ease' }}
+            onMouseEnter={e => e.currentTarget.style.color = '#4263EB'}
+            onMouseLeave={e => e.currentTarget.style.color = COLORS.muted}
+            title="Bewerk actie"
+          >
+            <Pencil size={15} />
+          </button>
           <button
             onClick={() => onDelete(action.id)}
             style={{ background: 'none', border: 'none', padding: '4px', borderRadius: 6, color: COLORS.muted, cursor: 'pointer', display: 'flex', transition: 'color 140ms ease' }}

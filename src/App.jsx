@@ -91,6 +91,7 @@ export default function App() {
   const [loading, setLoading]       = useState(true);
   const [view, setView]             = useState('open');
   const [showForm, setShowForm]     = useState(false);
+  const [editAction, setEditAction] = useState(null);
   const [isMobile, setIsMobile]     = useState(window.innerWidth < 768);
   const [toast, setToast]           = useState(null);
 
@@ -180,6 +181,17 @@ export default function App() {
     const { error } = await supabase.from('actions').update({ percent_delivery: newProgress }).eq('id', id);
     if (error) return;
     setActions(prev => prev.map(a => a.id === id ? { ...a, percent_delivery: newProgress } : a));
+  };
+
+  const handleUpdateAction = async (formData, id) => {
+    const updates = { ...formData };
+    if (formData.status === 'Completed') updates.completed_at = new Date().toISOString();
+    else updates.completed_at = null;
+    const { error } = await supabase.from('actions').update(updates).eq('id', id);
+    if (error) throw error;
+    setActions(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+    setEditAction(null);
+    showToast('Actie bijgewerkt');
   };
 
   const handleDelete = async (id) => {
@@ -357,6 +369,7 @@ export default function App() {
                       onStatusChange={handleUpdateStatus}
                       onProgressChange={handleUpdateProgress}
                       onDelete={handleDelete}
+                      onEdit={setEditAction}
                     />
                   ))}
                 </div>
@@ -367,6 +380,7 @@ export default function App() {
                   onStatusChange={handleUpdateStatus}
                   onProgressChange={handleUpdateProgress}
                   onDelete={handleDelete}
+                  onEdit={setEditAction}
                 />
               )}
             </div>
@@ -383,6 +397,18 @@ export default function App() {
           onCancel={() => setShowForm(false)}
           session={session}
           onCategoryCreated={loadCategories}
+        />
+      )}
+
+      {editAction && (
+        <ActionForm
+          categories={categories}
+          users={users}
+          onSave={handleUpdateAction}
+          onCancel={() => setEditAction(null)}
+          session={session}
+          onCategoryCreated={loadCategories}
+          editAction={editAction}
         />
       )}
 
