@@ -64,7 +64,7 @@ export default function App() {
 
   const loadActions = useCallback(async () => {
     const { data, error } = await supabase
-      .from('Actions')
+      .from('actions')
       .select('*')
       .order('created_at', { ascending: false });
     if (!error) setActions(data || []);
@@ -72,14 +72,14 @@ export default function App() {
 
   const loadCategories = useCallback(async () => {
     const { data, error } = await supabase
-      .from('Categories')
+      .from('categories')
       .select('*')
       .order('name', { ascending: true });
     if (!error) setCategories(data || []);
   }, []);
 
   const handleCreateAction = async (formData) => {
-    const { error } = await supabase.from('Actions').insert([formData]);
+    const { error } = await supabase.from('actions').insert([formData]);
     if (error) throw error;
     await loadActions();
     setShowForm(false);
@@ -91,20 +91,20 @@ export default function App() {
     if (newStatus === 'Completed') updates.completed_at = new Date().toISOString();
     else updates.completed_at = null;
 
-    const { error } = await supabase.from('Actions').update(updates).eq('id', id);
+    const { error } = await supabase.from('actions').update(updates).eq('id', id);
     if (error) return;
     setActions(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
   };
 
   const handleUpdateProgress = async (id, newProgress) => {
-    const { error } = await supabase.from('Actions').update({ percent_delivery: newProgress }).eq('id', id);
+    const { error } = await supabase.from('actions').update({ percent_delivery: newProgress }).eq('id', id);
     if (error) return;
     setActions(prev => prev.map(a => a.id === id ? { ...a, percent_delivery: newProgress } : a));
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Weet je zeker dat je deze actie wilt verwijderen?')) return;
-    const { error } = await supabase.from('Actions').delete().eq('id', id);
+    const { error } = await supabase.from('actions').delete().eq('id', id);
     if (error) return;
     setActions(prev => prev.filter(a => a.id !== id));
     showToast('Actie verwijderd', 'info');

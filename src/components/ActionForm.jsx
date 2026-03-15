@@ -31,7 +31,7 @@ export default function ActionForm({ categories, onSave, onCancel, session, onCa
   const [error, setError]                       = useState(null);
 
   const handleNewCategory = async (name) => {
-    const { data, error } = await supabase.from('Categories').insert([{ name }]).select().single();
+    const { data, error } = await supabase.from('categories').insert([{ name }]).select().single();
     if (error) { console.error('Failed to create category:', error.message); return; }
     setCategoryId(data.id);
     onCategoryCreated?.();
