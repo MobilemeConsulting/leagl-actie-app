@@ -211,6 +211,10 @@ export default function AdminDashboard() {
   const [loading, setLoading]     = useState(false);
   const [toast, setToast]         = useState(null);
 
+  // Tenant selector
+  const [tenantsList, setTenantsList]           = useState([]);
+  const [selectedTenantId, setSelectedTenantId] = useState('');
+
   // Create user form
   const [newEmail, setNewEmail]   = useState('');
   const [newName, setNewName]     = useState('');
@@ -232,29 +236,37 @@ export default function AdminDashboard() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    // Load tenants list
+    const { data: tenantsData } = await adminSupabase.from('tenants').select('*').order('name');
+    setTenantsList(tenantsData || []);
+
+    let actsQuery  = adminSupabase.from('actions').select('*').order('created_at', { ascending: false });
+    let catsQuery  = adminSupabase.from('categories').select('*');
+    if (selectedTenantId) {
+      actsQuery = actsQuery.eq('tenant_id', selectedTenantId);
+      catsQuery = catsQuery.eq('tenant_id', selectedTenantId);
+    }
     const [{ data: usersData }, { data: actsData }, { data: catsData }] = await Promise.all([
       adminSupabase.auth.admin.listUsers(),
-      adminSupabase.from('actions').select('*').order('created_at', { ascending: false }),
-      adminSupabase.from('categories').select('*'),
+      actsQuery,
+      catsQuery,
     ]);
     setUsers(usersData?.users || []);
     setActions(actsData || []);
     setCategories(catsData || []);
     setLoading(false);
-  }, []);
+  }, [selectedTenantId]);
 
   const loadLogs = useCallback(async () => {
     setLogsLoading(true);
-    const { data } = await supabase
-      .from('action_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(200);
+    let q = supabase.from('action_logs').select('*').order('created_at', { ascending: false }).limit(200);
+    if (selectedTenantId) q = q.eq('tenant_id', selectedTenantId);
+    const { data } = await q;
     setLogs(data || []);
     setLogsLoading(false);
-  }, []);
+  }, [selectedTenantId]);
 
-  useEffect(() => { if (authed) { loadData(); loadLogs(); } }, [authed]);
+  useEffect(() => { if (authed) { loadData(); loadLogs(); } }, [authed, selectedTenantId]);
 
   async function createUser(e) {
     e.preventDefault();
@@ -271,6 +283,16 @@ export default function AdminDashboard() {
         user_metadata: { must_change_password: true },
       });
       if (error) throw error;
+
+      // Add to selected tenant if one is selected
+      if (selectedTenantId && created?.user?.id) {
+        await adminSupabase.from('tenant_users').insert([{
+          tenant_id: selectedTenantId,
+          user_id: created.user.id,
+          user_email: newEmail.trim(),
+          role: 'member',
+        }]);
+      }
 
       // Stuur welkomstmail met tijdelijk wachtwoord (non-blocking)
       sendWelcomeEmail({ to: newEmail.trim(), tempPassword: tempPw, name: newName.trim() })
@@ -291,10 +313,12 @@ export default function AdminDashboard() {
     const { error } = await adminSupabase.auth.admin.deleteUser(userId);
     if (error) { showToast(error.message, 'error'); return; }
     // Flag open actions assigned to this user
-    await adminSupabase.from('actions')
+    let flagQuery = adminSupabase.from('actions')
       .update({ needs_reassignment: true })
       .eq('assigned_to_email', email)
       .neq('status', 'Completed');
+    if (selectedTenantId) flagQuery = flagQuery.eq('tenant_id', selectedTenantId);
+    await flagQuery;
     showToast(`Gebruiker ${email} verwijderd — open acties gemarkeerd`);
     setUsers(prev => prev.filter(u => u.id !== userId));
     await loadData();
@@ -417,7 +441,19 @@ export default function AdminDashboard() {
 
         {/* Topbar */}
         <div style={{ height: 56, background: C.surface, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', flexShrink: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{NAV.find(n => n.id === activeNav)?.label}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{NAV.find(n => n.id === activeNav)?.label}</div>
+            {tenantsList.length > 0 && (
+              <select
+                value={selectedTenantId}
+                onChange={e => setSelectedTenantId(e.target.value)}
+                style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 10px', fontSize: 12, color: C.text, outline: 'none', cursor: 'pointer' }}
+              >
+                <option value="">Alle tenants</option>
+                {tenantsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: 10 }}>
             {activeNav === 'actions' && (
               <button onClick={exportCSV}

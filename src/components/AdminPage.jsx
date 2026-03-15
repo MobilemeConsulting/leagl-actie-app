@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient.js';
 import { Users, ClipboardList, CheckCircle2, Clock, Circle, RefreshCw } from 'lucide-react';
+import { useTenantContext } from '../context/TenantContext.jsx';
 
 // eslint-disable-next-line
 async function _unused() {
@@ -135,22 +136,24 @@ function BarChart({ data, colorFn }) {
 }
 
 export default function AdminPage({ session }) {
+  const { tenant } = useTenantContext();
   const [actions, setActions]       = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
+    if (!tenant?.id) return;
     async function load() {
       const [{ data: acts }, { data: cats }] = await Promise.all([
-        supabase.from('actions').select('*'),
-        supabase.from('categories').select('*'),
+        supabase.from('actions').select('*').eq('tenant_id', tenant.id),
+        supabase.from('categories').select('*').eq('tenant_id', tenant.id),
       ]);
       setActions(acts || []);
       setCategories(cats || []);
       setLoading(false);
     }
     load();
-  }, []);
+  }, [tenant?.id]);
 
 if (loading) {
     return (

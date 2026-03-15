@@ -2,15 +2,17 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 
-// Route /admin to the full admin panel, everything else to the regular app
-const isAdmin = window.location.pathname === '/admin';
+const path = window.location.pathname;
 
 async function mount() {
   const root = ReactDOM.createRoot(document.getElementById('root'));
 
-  if (isAdmin) {
+  if (path === '/admin') {
     const { default: AdminDashboard } = await import('./pages/AdminDashboard.jsx');
     root.render(<AdminDashboard />);
+  } else if (path === '/superadmin') {
+    const { default: SuperAdminDashboard } = await import('./pages/SuperAdminDashboard.jsx');
+    root.render(<SuperAdminDashboard />);
   } else {
     const { default: App } = await import('./App.jsx');
     root.render(

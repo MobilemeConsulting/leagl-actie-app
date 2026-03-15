@@ -17,7 +17,7 @@ const COLORS = {
 const label = { fontSize: 11, fontWeight: 600, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 };
 const input = { width: '100%', background: COLORS.surface2, border: `1.5px solid ${COLORS.border}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: COLORS.text, outline: 'none', boxSizing: 'border-box' };
 
-export default function ActionForm({ categories, users = [], onSave, onCancel, session, onCategoryCreated, editAction = null }) {
+export default function ActionForm({ categories, users = [], onSave, onCancel, session, onCategoryCreated, editAction = null, tenantId = null }) {
   const { syncToMicrosoftToDo } = useMicrosoftSync();
   const isEdit = editAction !== null;
 
@@ -32,7 +32,8 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
   const [error, setError]                       = useState(null);
 
   const handleNewCategory = async (name) => {
-    const { data, error } = await supabase.from('categories').insert([{ name }]).select().single();
+    const payload = tenantId ? { name, tenant_id: tenantId } : { name };
+    const { data, error } = await supabase.from('categories').insert([payload]).select().single();
     if (error) { console.error('Failed to create category:', error.message); return; }
     setCategoryId(data.id);
     onCategoryCreated?.();

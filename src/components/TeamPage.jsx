@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient.js';
 import { adminSupabase } from '../adminSupabaseClient.js';
 import { Mail, Loader2 } from 'lucide-react';
+import { useTenantContext } from '../context/TenantContext.jsx';
 
 const BREVO_KEY = import.meta.env.VITE_BREVO_API_KEY;
-const APP_URL   = import.meta.env.VITE_APP_URL || 'https://prolific-achievement-production.up.railway.app';
+const APP_URL   = import.meta.env.VITE_APP_URL || 'https://leagl-actionlist.up.railway.app';
 const SENDER    = 'frederiek.deprest@gmail.com';
 
 async function sendWelcomeEmail({ to, tempPassword, name }) {
@@ -80,6 +81,7 @@ const C = {
 };
 
 export default function TeamPage() {
+  const { tenant } = useTenantContext();
   const [actions, setActions]       = useState([]);
   const [loading, setLoading]       = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -88,11 +90,12 @@ export default function TeamPage() {
   const [inviteMsg, setInviteMsg]     = useState(null);
 
   useEffect(() => {
-    supabase.from('actions').select('assigned_to_email, status').then(({ data }) => {
+    if (!tenant?.id) return;
+    supabase.from('actions').select('assigned_to_email, status').eq('tenant_id', tenant.id).then(({ data }) => {
       setActions(data || []);
       setLoading(false);
     });
-  }, []);
+  }, [tenant?.id]);
 
   async function handleInvite(e) {
     e.preventDefault();
@@ -102,13 +105,22 @@ export default function TeamPage() {
     setInviteMsg(null);
     try {
       const tempPassword = genTempPassword();
-      const { error } = await adminSupabase.auth.admin.createUser({
+      const { data: created, error } = await adminSupabase.auth.admin.createUser({
         email,
         password: tempPassword,
         email_confirm: true,
         user_metadata: { must_change_password: true },
       });
       if (error) throw error;
+      // Add user to this tenant
+      if (tenant?.id && created?.user?.id) {
+        await supabase.from('tenant_users').insert([{
+          tenant_id: tenant.id,
+          user_id: created.user.id,
+          user_email: email,
+          role: 'member',
+        }]).throwOnError();
+      }
       sendWelcomeEmail({ to: email, tempPassword, name: inviteName.trim() }).catch(err =>
         console.warn('Welcome email failed:', err.message)
       );

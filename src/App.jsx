@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, LogOut, ClipboardList, Loader2, CheckSquare, ListTodo, LayoutDashboard, Users } from 'lucide-react';
 import { supabase, signOut } from './supabaseClient.js';
-import { adminSupabase } from './adminSupabaseClient.js';
+import { TenantProvider, useTenantContext } from './context/TenantContext.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import ActionCard from './components/ActionCard.jsx';
 import ActionTable from './components/ActionTable.jsx';
 import ActionForm from './components/ActionForm.jsx';
 import AdminPage from './components/AdminPage.jsx';
 import TeamPage from './components/TeamPage.jsx';
+import TenantPicker from './components/TenantPicker.jsx';
 
 const BREVO_KEY = import.meta.env.VITE_BREVO_API_KEY;
-const APP_URL   = 'https://prolific-achievement-production.up.railway.app';
+const APP_URL   = import.meta.env.VITE_APP_URL || 'https://leagl-actionlist.up.railway.app';
 const SENDER    = 'frederiek.deprest@gmail.com';
 
 async function sendAssignmentEmail({ to, subject, dueDate, assignedByEmail }) {
@@ -67,30 +68,25 @@ async function sendAssignmentEmail({ to, subject, dueDate, assignedByEmail }) {
 }
 
 const COLORS = {
-  accent: '#C8A96E',
-  blue: '#4263EB',
-  bg: '#F7F5F2',
-  surface: '#FFFFFF',
-  surface2: '#F0EDE8',
-  border: '#E4E1DC',
-  text: '#141210',
-  muted: '#8A8480',
-  success: '#2D9E5A',
+  accent: '#C8A96E', blue: '#4263EB', bg: '#F7F5F2',
+  surface: '#FFFFFF', surface2: '#F0EDE8', border: '#E4E1DC',
+  text: '#141210', muted: '#8A8480', success: '#2D9E5A',
 };
 
 const NAV_ITEMS = [
-  { id: 'open',   label: 'Actieve Acties',  icon: <ListTodo size={16} /> },
-  { id: 'closed', label: 'Afgerond',         icon: <CheckSquare size={16} /> },
-  { id: 'admin',  label: 'Stats',             icon: <LayoutDashboard size={16} /> },
-  { id: 'team',   label: 'Team',              icon: <Users size={16} /> },
+  { id: 'open',   label: 'Actieve Acties', icon: <ListTodo size={16} /> },
+  { id: 'closed', label: 'Afgerond',        icon: <CheckSquare size={16} /> },
+  { id: 'admin',  label: 'Stats',           icon: <LayoutDashboard size={16} /> },
+  { id: 'team',   label: 'Team',            icon: <Users size={16} /> },
 ];
 
-export default function App() {
-  const [session, setSession]       = useState(null);
+// ── AppShell uses TenantContext ────────────────────────────────────────────
+function AppShell({ session, onSignOut }) {
+  const { tenant, needsPicker, tenantError, tenantLoading } = useTenantContext();
+
   const [actions, setActions]       = useState([]);
   const [categories, setCategories] = useState([]);
   const [users, setUsers]           = useState([]);
-  const [loading, setLoading]       = useState(true);
   const [view, setView]             = useState('open');
   const [showForm, setShowForm]     = useState(false);
   const [editAction, setEditAction] = useState(null);
@@ -104,23 +100,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (session) {
+    if (tenant?.id) {
       loadActions();
       loadCategories();
       loadUsers();
     }
-  }, [session]);
+  }, [tenant?.id]);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -128,22 +113,40 @@ export default function App() {
   };
 
   const loadActions = useCallback(async () => {
+    if (!tenant?.id) return;
     const { data, error } = await supabase
       .from('actions')
       .select('*')
+      .eq('tenant_id', tenant.id)
       .order('created_at', { ascending: false });
     if (!error) setActions(data || []);
-  }, []);
+  }, [tenant?.id]);
 
   const loadCategories = useCallback(async () => {
+    if (!tenant?.id) return;
     const { data, error } = await supabase
       .from('categories')
       .select('*')
+      .eq('tenant_id', tenant.id)
       .order('name', { ascending: true });
     if (!error) setCategories(data || []);
-  }, []);
+  }, [tenant?.id]);
+
+  const loadUsers = useCallback(async () => {
+    if (!tenant?.id) return;
+    try {
+      const { data } = await supabase
+        .from('tenant_users')
+        .select('user_id, user_email')
+        .eq('tenant_id', tenant.id);
+      setUsers((data || []).map(u => ({ id: u.user_id, email: u.user_email })));
+    } catch (e) {
+      console.warn('Could not load users:', e.message);
+    }
+  }, [tenant?.id]);
 
   const writeLog = useCallback(async ({ actionId, actionSubject, changeType, oldValue, newValue }) => {
+    if (!tenant?.id) return;
     try {
       await supabase.from('action_logs').insert([{
         action_id: actionId,
@@ -152,23 +155,16 @@ export default function App() {
         change_type: changeType,
         old_value: oldValue ?? null,
         new_value: newValue ?? null,
+        tenant_id: tenant.id,
       }]);
     } catch (e) {
       console.warn('Log schrijven mislukt:', e.message);
     }
-  }, [session]);
-
-  const loadUsers = useCallback(async () => {
-    try {
-      const { data } = await adminSupabase.auth.admin.listUsers({ perPage: 200 });
-      setUsers((data?.users || []).filter(u => u.email).map(u => ({ id: u.id, email: u.email })));
-    } catch (e) {
-      console.warn('Could not load users:', e.message);
-    }
-  }, []);
+  }, [session, tenant?.id]);
 
   const handleCreateAction = async (formData) => {
-    const { data, error } = await supabase.from('actions').insert([formData]).select().single();
+    const payload = { ...formData, tenant_id: tenant.id };
+    const { data, error } = await supabase.from('actions').insert([payload]).select().single();
     if (error) throw error;
     await loadActions();
     setShowForm(false);
@@ -188,7 +184,6 @@ export default function App() {
     const updates = { status: newStatus };
     if (newStatus === 'Completed') updates.completed_at = new Date().toISOString();
     else updates.completed_at = null;
-
     const { error } = await supabase.from('actions').update(updates).eq('id', id);
     if (error) return;
     const action = actions.find(a => a.id === id);
@@ -209,16 +204,14 @@ export default function App() {
     const updates = { ...formData };
     if (formData.status === 'Completed') updates.completed_at = new Date().toISOString();
     else updates.completed_at = null;
+    if (formData.assigned_to_email && old?.needs_reassignment) {
+      updates.needs_reassignment = false;
+    }
     const { error } = await supabase.from('actions').update(updates).eq('id', id);
     if (error) throw error;
     setActions(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
     setEditAction(null);
     showToast('Actie bijgewerkt');
-    // Log individual field changes
-    // Clear needs_reassignment flag when a new owner is assigned
-    if (formData.assigned_to_email && old?.needs_reassignment) {
-      updates.needs_reassignment = false;
-    }
     const fields = [
       { key: 'subject',           label: 'onderwerp' },
       { key: 'status',            label: 'status' },
@@ -244,33 +237,44 @@ export default function App() {
     writeLog({ actionId: id, actionSubject: action?.subject, changeType: 'verwijderd', oldValue: action?.status });
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    setSession(null);
-    setActions([]);
-    setCategories([]);
-  };
-
-  if (!session && !loading) return <LoginPage />;
-
-  if (loading) {
+  // ── Loading / error / picker states ──
+  if (tenantLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: COLORS.bg }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ width: 36, height: 36, border: `3px solid ${COLORS.border}`, borderTopColor: COLORS.accent, borderRadius: '50%', margin: '0 auto 14px', animation: 'spin 0.8s linear infinite' }} />
-          <div style={{ fontSize: 14, color: COLORS.muted }}>Laden...</div>
+          <div style={{ fontSize: 14, color: COLORS.muted }}>Organisatie laden...</div>
         </div>
       </div>
     );
   }
 
+  if (tenantError) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: COLORS.bg }}>
+        <div style={{ maxWidth: 400, textAlign: 'center', padding: 24 }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>⚠️</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.text, marginBottom: 8 }}>Geen toegang</div>
+          <div style={{ fontSize: 13, color: COLORS.muted, marginBottom: 24, lineHeight: 1.6 }}>{tenantError}</div>
+          <button onClick={onSignOut}
+            style={{ background: COLORS.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            Uitloggen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (needsPicker) return <TenantPicker />;
+
+  const accentColor = tenant?.primary_color || COLORS.accent;
+  const brandName   = tenant?.name || 'LEAGL';
+
   const visibleActions = actions.filter(a =>
     view === 'open' ? (a.status === 'Open' || a.status === 'In Progress') : a.status === 'Completed'
   );
-
   const openCount   = actions.filter(a => a.status === 'Open' || a.status === 'In Progress').length;
   const closedCount = actions.filter(a => a.status === 'Completed').length;
-
   const currentNavItem = NAV_ITEMS.find(n => n.id === view);
 
   return (
@@ -280,7 +284,11 @@ export default function App() {
       <div className="app-sidebar">
         {/* Brand */}
         <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.accent, letterSpacing: '0.12em' }}>LEAGL</div>
+          {tenant?.logo_url ? (
+            <img src={tenant.logo_url} alt={brandName} style={{ height: 28, objectFit: 'contain', marginBottom: 4 }} />
+          ) : (
+            <div style={{ fontSize: 20, fontWeight: 800, color: accentColor, letterSpacing: '0.12em' }}>{brandName}</div>
+          )}
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: 4 }}>Actie Platform</div>
         </div>
 
@@ -292,26 +300,11 @@ export default function App() {
             return (
               <div key={n.id}
                 onClick={() => setView(n.id)}
-                style={{
-                  padding: '9px 12px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  borderRadius: 8,
-                  marginBottom: 2,
-                  background: isActive ? 'rgba(255,255,255,0.09)' : 'transparent',
-                  color: isActive ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.40)',
-                  fontSize: 13.5,
-                  fontWeight: isActive ? 600 : 400,
-                  transition: 'background 140ms ease, color 140ms ease',
-                  position: 'relative',
-                  userSelect: 'none',
-                }}
+                style={{ padding: '9px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, borderRadius: 8, marginBottom: 2, background: isActive ? 'rgba(255,255,255,0.09)' : 'transparent', color: isActive ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.40)', fontSize: 13.5, fontWeight: isActive ? 600 : 400, transition: 'background 140ms ease, color 140ms ease', position: 'relative', userSelect: 'none' }}
                 onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.68)'; } }}
                 onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.40)'; } }}
               >
-                {isActive && <span style={{ position: 'absolute', left: 0, top: '22%', bottom: '22%', width: 3, background: COLORS.accent, borderRadius: '0 3px 3px 0' }} />}
+                {isActive && <span style={{ position: 'absolute', left: 0, top: '22%', bottom: '22%', width: 3, background: accentColor, borderRadius: '0 3px 3px 0' }} />}
                 <span style={{ fontSize: 14, opacity: isActive ? 1 : 0.75, marginLeft: isActive ? 4 : 0 }}>{n.icon}</span>
                 <span style={{ flex: 1 }}>{n.label}</span>
                 {count !== null && <span style={{ fontSize: 11, background: isActive ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)', color: isActive ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)', borderRadius: 10, padding: '1px 7px', fontWeight: 600 }}>{count}</span>}
@@ -319,13 +312,12 @@ export default function App() {
             );
           })}
 
-          {/* Divider + new action button */}
           <div style={{ margin: '14px 0', height: 1, background: 'rgba(255,255,255,0.06)' }} />
           <button
             onClick={() => setShowForm(true)}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: COLORS.accent + '18', border: `1px solid ${COLORS.accent}33`, borderRadius: 8, color: COLORS.accent, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', transition: 'background 140ms ease' }}
-            onMouseEnter={e => e.currentTarget.style.background = COLORS.accent + '28'}
-            onMouseLeave={e => e.currentTarget.style.background = COLORS.accent + '18'}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: accentColor + '18', border: `1px solid ${accentColor}33`, borderRadius: 8, color: accentColor, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', transition: 'background 140ms ease' }}
+            onMouseEnter={e => e.currentTarget.style.background = accentColor + '28'}
+            onMouseLeave={e => e.currentTarget.style.background = accentColor + '18'}
           >
             <Plus size={16} />
             Nieuwe Actie
@@ -340,7 +332,7 @@ export default function App() {
             </div>
           )}
           <button
-            onClick={handleSignOut}
+            onClick={onSignOut}
             style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.32)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'color 140ms ease' }}
             onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.65)'}
             onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.32)'}
@@ -379,18 +371,9 @@ export default function App() {
 
         {/* Scrollable content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px 12px' : '24px 28px' }}>
+          {view === 'admin' && <AdminPage session={session} />}
+          {view === 'team'  && <TeamPage />}
 
-          {/* Stats page */}
-          {view === 'admin' && (
-            <AdminPage session={session} />
-          )}
-
-          {/* Team page */}
-          {view === 'team' && (
-            <TeamPage />
-          )}
-
-          {/* Empty state */}
           {view !== 'admin' && view !== 'team' && visibleActions.length === 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }} className="fade-in">
               <ClipboardList size={56} style={{ color: COLORS.border, marginBottom: 20 }} />
@@ -403,7 +386,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Action list */}
           {view !== 'admin' && view !== 'team' && visibleActions.length > 0 && (
             <div className="fade-in">
               {isMobile ? (
@@ -435,7 +417,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── MODAL ── */}
+      {/* ── MODALS ── */}
       {showForm && (
         <ActionForm
           categories={categories}
@@ -444,9 +426,9 @@ export default function App() {
           onCancel={() => setShowForm(false)}
           session={session}
           onCategoryCreated={loadCategories}
+          tenantId={tenant?.id}
         />
       )}
-
       {editAction && (
         <ActionForm
           categories={categories}
@@ -456,6 +438,7 @@ export default function App() {
           session={session}
           onCategoryCreated={loadCategories}
           editAction={editAction}
+          tenantId={tenant?.id}
         />
       )}
 
@@ -471,5 +454,46 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+// ── App: manages session, wraps AppShell in TenantProvider ─────────────────
+export default function App() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    await signOut();
+    setSession(null);
+  };
+
+  if (!session && !loading) return <LoginPage />;
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#F7F5F2' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 36, height: 36, border: '3px solid #E4E1DC', borderTopColor: '#C8A96E', borderRadius: '50%', margin: '0 auto 14px', animation: 'spin 0.8s linear infinite' }} />
+          <div style={{ fontSize: 14, color: '#8A8480' }}>Laden...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <TenantProvider session={session}>
+      <AppShell session={session} onSignOut={handleSignOut} />
+    </TenantProvider>
   );
 }
