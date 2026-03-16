@@ -135,10 +135,11 @@ function AppShell({ session, onSignOut }) {
 
   const loadCategories = useCallback(async () => {
     if (!tenant?.id) return;
+    // Laad zowel tenant-scoped als null-tenant categorieën (legacy data)
     const { data, error } = await supabase
       .from('categories')
       .select('*')
-      .eq('tenant_id', tenant.id)
+      .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
       .order('name', { ascending: true });
     if (!error) setCategories(data || []);
   }, [tenant?.id]);
@@ -292,12 +293,18 @@ function AppShell({ session, onSignOut }) {
     setFilterStatus('');
   };
 
+  // Bouw een volledige id→naam map (inclusief null-tenant legacy categorieën)
+  const categoryNameById = {};
+  categories.forEach(c => { categoryNameById[c.id] = c.name; });
+  const selectedCategoryName = filterCategory ? categoryNameById[filterCategory] : null;
+
   const visibleActions = actions.filter(a => {
     const matchesView = view === 'open'
       ? (a.status === 'Open' || a.status === 'In Progress')
       : a.status === 'Completed';
     const matchesSubject  = !filterSubject  || a.subject.toLowerCase().includes(filterSubject.toLowerCase());
-    const matchesCategory = !filterCategory || a.category_id === filterCategory;
+    // Vergelijk op naam zodat oude (null-tenant) en nieuwe (tenant-scoped) UUIDs beiden matchen
+    const matchesCategory = !filterCategory || categoryNameById[a.category_id] === selectedCategoryName;
     const matchesStatus   = !filterStatus   || a.status === filterStatus;
     return matchesView && matchesSubject && matchesCategory && matchesStatus;
   });
@@ -429,7 +436,10 @@ function AppShell({ session, onSignOut }) {
                 style={{ flex: '1 1 140px', minWidth: 120, padding: '7px 10px', background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13, color: filterCategory ? COLORS.text : COLORS.muted, outline: 'none', cursor: 'pointer' }}
               >
                 <option value="">Alle categorieën</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {/* Dedupliceer op naam — toon elke categorienaam maar één keer */}
+                {categories
+                  .filter((c, idx, arr) => arr.findIndex(x => x.name === c.name) === idx)
+                  .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
 
               {/* Status (alleen actieve view) */}
@@ -460,12 +470,25 @@ function AppShell({ session, onSignOut }) {
           {view !== 'admin' && view !== 'team' && visibleActions.length === 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }} className="fade-in">
               <ClipboardList size={56} style={{ color: COLORS.border, marginBottom: 20 }} />
-              <div style={{ fontSize: 18, fontWeight: 600, color: COLORS.text, marginBottom: 6 }}>
-                {view === 'open' ? 'Geen actieve acties' : 'Geen afgeronde acties'}
-              </div>
-              <div style={{ fontSize: 14, color: COLORS.muted }}>
-                {view === 'open' ? 'Klik op "Nieuwe Actie" om te beginnen.' : 'Afgeronde acties verschijnen hier.'}
-              </div>
+              {(filterSubject || filterCategory || filterStatus) ? (
+                <>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: COLORS.text, marginBottom: 6 }}>Geen resultaten</div>
+                  <div style={{ fontSize: 14, color: COLORS.muted, marginBottom: 16 }}>Geen acties gevonden voor de geselecteerde filters.</div>
+                  <button onClick={() => { setFilterSubject(''); setFilterCategory(''); setFilterStatus(''); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: COLORS.blue, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    <X size={14} /> Reset filters
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: COLORS.text, marginBottom: 6 }}>
+                    {view === 'open' ? 'Geen actieve acties' : 'Geen afgeronde acties'}
+                  </div>
+                  <div style={{ fontSize: 14, color: COLORS.muted }}>
+                    {view === 'open' ? 'Klik op "Nieuwe Actie" om te beginnen.' : 'Afgeronde acties verschijnen hier.'}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
