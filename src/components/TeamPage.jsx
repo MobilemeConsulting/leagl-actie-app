@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient.js';
 import { adminSupabase } from '../adminSupabaseClient.js';
 import { Mail, Loader2 } from 'lucide-react';
 import { useTenantContext } from '../context/TenantContext.jsx';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const BREVO_KEY = import.meta.env.VITE_BREVO_API_KEY;
 const APP_URL   = import.meta.env.VITE_APP_URL || 'https://leagl-actionlist.up.railway.app';
@@ -89,6 +90,7 @@ const C = {
 
 export default function TeamPage() {
   const { tenant } = useTenantContext();
+  const { t } = useLanguage();
   const [actions, setActions]       = useState([]);
   const [loading, setLoading]       = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -131,7 +133,7 @@ export default function TeamPage() {
       sendWelcomeEmail({ to: email, tempPassword, name: inviteName.trim() }).catch(err =>
         console.warn('Welcome email failed:', err.message)
       );
-      setInviteMsg({ type: 'success', text: `Account aangemaakt — welkomstmail verstuurd naar ${email}` });
+      setInviteMsg({ type: 'success', text: `${t('team_invite_ok')} ${email}` });
       setInviteEmail(''); setInviteName('');
     } catch (err) {
       setInviteMsg({ type: 'error', text: err.message });
@@ -147,30 +149,30 @@ export default function TeamPage() {
 
       {/* Invite form */}
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4, letterSpacing: '-0.01em' }}>Teamlid uitnodigen</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4, letterSpacing: '-0.01em' }}>{t('team_invite_title')}</div>
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.6 }}>
-          Account wordt aangemaakt met tijdelijk wachtwoord. De nieuwe collega ontvangt een welkomstmail met instructies.
+          {t('team_invite_sub')}
         </div>
         <form onSubmit={handleInvite} style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <input
             type="text"
             value={inviteName}
             onChange={e => setInviteName(e.target.value)}
-            placeholder="Naam"
+            placeholder={t('team_name_ph')}
             style={{ width: 160, background: C.surface2, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, color: C.text, outline: 'none', fontFamily: 'inherit', flexShrink: 0 }}
           />
           <input
             type="email"
             value={inviteEmail}
             onChange={e => setInviteEmail(e.target.value)}
-            placeholder="collega@bedrijf.be"
+            placeholder={t('team_email_ph')}
             required
             style={{ flex: 1, minWidth: 200, background: C.surface2, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, color: C.text, outline: 'none', fontFamily: 'inherit' }}
           />
           <button type="submit" disabled={inviting || !inviteEmail.trim()}
             style={{ display: 'flex', alignItems: 'center', gap: 8, background: inviting || !inviteEmail.trim() ? C.muted : C.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: inviting ? 'not-allowed' : 'pointer', boxShadow: inviting ? 'none' : '0 2px 8px rgba(66,99,235,0.28)', whiteSpace: 'nowrap' }}>
             {inviting ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Mail size={14} />}
-            {inviting ? 'Versturen...' : 'Uitnodigen'}
+            {inviting ? t('team_inviting') : t('team_invite_btn')}
           </button>
         </form>
         {inviteMsg && (
@@ -182,14 +184,14 @@ export default function TeamPage() {
 
       {/* Active team members */}
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4, letterSpacing: '-0.01em' }}>Actieve teamleden</div>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Teamleden die momenteel acties toegewezen hebben.</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4, letterSpacing: '-0.01em' }}>{t('team_members_title')}</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>{t('team_members_sub')}</div>
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '30px 0' }}>
             <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : teamEmails.length === 0 ? (
-          <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '24px 0' }}>Nog geen teamleden met toegewezen acties.</div>
+          <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '24px 0' }}>{t('team_no_members')}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {teamEmails.map(email => {
@@ -202,8 +204,8 @@ export default function TeamPage() {
                   </div>
                   <div style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</div>
                   <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, background: 'rgba(66,99,235,0.08)', color: C.blue, border: '1px solid rgba(66,99,235,0.2)', borderRadius: 6, padding: '2px 8px' }}>{open} open</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, background: 'rgba(45,158,90,0.08)', color: C.success, border: '1px solid rgba(45,158,90,0.2)', borderRadius: 6, padding: '2px 8px' }}>{done} afgerond</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, background: 'rgba(66,99,235,0.08)', color: C.blue, border: '1px solid rgba(66,99,235,0.2)', borderRadius: 6, padding: '2px 8px' }}>{open} {t('team_open')}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, background: 'rgba(45,158,90,0.08)', color: C.success, border: '1px solid rgba(45,158,90,0.2)', borderRadius: 6, padding: '2px 8px' }}>{done} {t('team_done')}</span>
                   </div>
                 </div>
               );

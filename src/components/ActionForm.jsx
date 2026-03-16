@@ -3,6 +3,7 @@ import { X, Save, Loader2 } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
 import CategoryCombobox from './CategoryCombobox.jsx';
 import { useMicrosoftSync } from '../hooks/useMicrosoftSync.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const COLORS = {
   surface: '#FFFFFF',
@@ -18,6 +19,7 @@ const label = { fontSize: 11, fontWeight: 600, color: COLORS.muted, textTransfor
 const input = { width: '100%', background: COLORS.surface2, border: `1.5px solid ${COLORS.border}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: COLORS.text, outline: 'none', boxSizing: 'border-box' };
 
 export default function ActionForm({ categories, users = [], onSave, onCancel, session, onCategoryCreated, editAction = null, tenantId = null }) {
+  const { t } = useLanguage();
   const { syncToMicrosoftToDo } = useMicrosoftSync();
   const isEdit = editAction !== null;
 
@@ -41,7 +43,7 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!subject.trim()) { setError('Onderwerp is verplicht.'); return; }
+    if (!subject.trim()) { setError(t('error_required')); return; }
 
     setSaving(true);
     setError(null);
@@ -66,7 +68,7 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
         }
       }
     } catch (err) {
-      setError('Opslaan mislukt. Probeer het opnieuw.');
+      setError(t('error_save'));
       setSaving(false);
     }
   };
@@ -79,7 +81,7 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
       <div className="modal-in" style={{ background: COLORS.surface, width: '100%', maxWidth: 520, borderRadius: '20px 20px 0 0', boxShadow: '0 -8px 40px rgba(0,0,0,0.16)', maxHeight: '90vh', overflowY: 'auto' }}>
         {/* Header */}
         <div style={{ position: 'sticky', top: 0, background: COLORS.surface, borderBottom: `1px solid ${COLORS.border}`, padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '20px 20px 0 0', zIndex: 1 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.text, letterSpacing: '-0.01em' }}>{isEdit ? 'Actie bewerken' : 'Nieuwe actie'}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.text, letterSpacing: '-0.01em' }}>{isEdit ? t('form_edit') : t('form_new')}</div>
           <button
             onClick={onCancel}
             style={{ background: COLORS.surface2, border: 'none', borderRadius: 8, padding: '6px', color: COLORS.muted, cursor: 'pointer', display: 'flex', transition: 'background 140ms ease' }}
@@ -100,14 +102,14 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
 
           {/* Subject */}
           <div>
-            <label style={label}>Onderwerp <span style={{ color: COLORS.danger }}>*</span></label>
+            <label style={label}>{t('field_subject')} <span style={{ color: COLORS.danger }}>*</span></label>
             <input type="text" value={subject} onChange={e => setSubject(e.target.value)}
-              placeholder="Beschrijf de actie..." required style={input} />
+              placeholder={t('placeholder_subject')} required style={input} />
           </div>
 
           {/* Category */}
           <div>
-            <label style={label}>Categorie</label>
+            <label style={label}>{t('field_category')}</label>
             <CategoryCombobox
               categories={categories}
               value={categoryId}
@@ -119,16 +121,16 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
           {/* Status + Progress */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div>
-              <label style={label}>Status</label>
+              <label style={label}>{t('field_status')}</label>
               <select value={status} onChange={e => setStatus(e.target.value)}
                 style={{ ...input, cursor: 'pointer' }}>
-                <option value="Open">Open</option>
-                <option value="In Progress">In behandeling</option>
-                <option value="Completed">Afgerond</option>
+                <option value="Open">{t('status_open')}</option>
+                <option value="In Progress">{t('status_in_progress')}</option>
+                <option value="Completed">{t('status_completed')}</option>
               </select>
             </div>
             <div>
-              <label style={label}>Voortgang: <span style={{ color: COLORS.blue, fontWeight: 700 }}>{percentDelivery}%</span></label>
+              <label style={label}>{t('field_progress')}: <span style={{ color: COLORS.blue, fontWeight: 700 }}>{percentDelivery}%</span></label>
               <input type="range" min="0" max="100" step="5"
                 value={percentDelivery} onChange={e => setPercentDelivery(Number(e.target.value))}
                 style={{ width: '100%', accentColor: COLORS.blue, marginTop: 6 }} />
@@ -137,20 +139,20 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
 
           {/* Due date */}
           <div>
-            <label style={label}>Deadline</label>
+            <label style={label}>{t('field_deadline')}</label>
             <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={input} />
           </div>
 
           {/* Assigned to */}
           <div>
-            <label style={label}>Toegewezen aan</label>
+            <label style={label}>{t('field_assigned')}</label>
             {users.length > 0 ? (
               <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
                 style={{ ...input, cursor: 'pointer' }}>
-                <option value="">— Niet toegewezen —</option>
+                <option value="">{t('not_assigned')}</option>
                 {/* Current user first */}
                 {session?.user?.email && (
-                  <option value={session.user.email}>{session.user.email} (jij)</option>
+                  <option value={session.user.email}>{session.user.email} {t('you_suffix')}</option>
                 )}
                 {users
                   .filter(u => u.email !== session?.user?.email)
@@ -161,7 +163,7 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
               </select>
             ) : (
               <input type="email" value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
-                placeholder="naam@voorbeeld.nl" style={input} />
+                placeholder={t('placeholder_email')} style={input} />
             )}
           </div>
 
@@ -170,7 +172,7 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
             <input type="checkbox" id="isPrivate" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)}
               style={{ width: 16, height: 16, accentColor: COLORS.blue, cursor: 'pointer' }} />
             <label htmlFor="isPrivate" style={{ fontSize: 13, fontWeight: 500, color: COLORS.text, cursor: 'pointer' }}>
-              Privé actie (alleen zichtbaar voor jou)
+              {t('field_private')}
             </label>
           </div>
 
@@ -181,13 +183,13 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
               onMouseEnter={e => e.currentTarget.style.borderColor = '#B0ADA8'}
               onMouseLeave={e => e.currentTarget.style.borderColor = COLORS.border}
             >
-              Annuleren
+              {t('cancel')}
             </button>
             <button type="submit" disabled={saving}
               style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', background: saving ? '#8A8480' : COLORS.blue, color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', boxShadow: saving ? 'none' : '0 2px 8px rgba(66,99,235,0.28)' }}
             >
               {saving ? <Loader2 size={15} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Save size={15} />}
-              {saving ? 'Opslaan...' : isEdit ? 'Wijzigingen opslaan' : 'Opslaan'}
+              {saving ? t('saving') : isEdit ? t('save_changes') : t('save')}
             </button>
           </div>
         </form>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Trash2, RefreshCw, Lock, Pencil, AlertTriangle } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const COLORS = {
   surface: '#FFFFFF',
@@ -22,6 +23,7 @@ const STATUS_COLOR = {
 };
 
 export default function ActionTable({ actions, categories, onStatusChange, onProgressChange, onDelete, onEdit }) {
+  const { t } = useLanguage();
   const hasCompleted = actions.some(a => a.status === 'Completed');
 
   const getCategoryName = (id) => categories.find(c => c.id === id)?.name ?? '—';
@@ -39,17 +41,17 @@ export default function ActionTable({ actions, categories, onStatusChange, onPro
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr>
-              <th style={{ ...th, width: 40 }}>#</th>
-              <th style={th}>Onderwerp</th>
-              <th style={th}>Categorie</th>
-              <th style={th}>Status</th>
-              <th style={th}>% Status</th>
-              <th style={th}>Deadline</th>
-              <th style={th}>Toegewezen aan</th>
-              <th style={{ ...th, textAlign: 'center' }}>Privé</th>
-              <th style={{ ...th, textAlign: 'center' }}>Sync</th>
-              {hasCompleted && <th style={th}>Afgerond op</th>}
-              <th style={{ ...th, textAlign: 'center' }}>Acties</th>
+              <th style={{ ...th, width: 40 }}>{t('col_num')}</th>
+              <th style={th}>{t('col_subject')}</th>
+              <th style={th}>{t('col_category')}</th>
+              <th style={th}>{t('col_status')}</th>
+              <th style={th}>{t('col_progress')}</th>
+              <th style={th}>{t('col_deadline')}</th>
+              <th style={th}>{t('col_assigned')}</th>
+              <th style={{ ...th, textAlign: 'center' }}>{t('col_private')}</th>
+              <th style={{ ...th, textAlign: 'center' }}>{t('col_sync')}</th>
+              {hasCompleted && <th style={th}>{t('col_completed_at')}</th>}
+              <th style={{ ...th, textAlign: 'center' }}>{t('col_actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -82,6 +84,7 @@ const getDaysUntilDeadline = (dateStr) => {
 };
 
 function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate, onStatusChange, onProgressChange, onDelete, onEdit }) {
+  const { t } = useLanguage();
   const [localProgress, setLocalProgress] = React.useState(action.percent_delivery ?? 0);
   const [hovered, setHovered] = React.useState(false);
 
@@ -130,9 +133,9 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
           onChange={e => onStatusChange(action.id, e.target.value)}
           style={{ background: statusCfg.bg, border: `1px solid ${statusCfg.border}`, color: statusCfg.color, borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', outline: 'none' }}
         >
-          <option value="Open">Open</option>
-          <option value="In Progress">In behandeling</option>
-          <option value="Completed">Afgerond</option>
+          <option value="Open">{t('status_open')}</option>
+          <option value="In Progress">{t('status_in_progress')}</option>
+          <option value="Completed">{t('status_completed')}</option>
         </select>
       </td>
 
@@ -166,8 +169,8 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
           return (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color, fontWeight: (isOverdue || isDueSoon) ? 600 : 400 }}>
               {formatDate(action.due_date)}
-              {isOverdue && <AlertTriangle size={13} title={`${Math.abs(days)} dag(en) verlopen`} />}
-              {isDueSoon && !isOverdue && <AlertTriangle size={13} title={`Verloopt over ${days} dag(en)`} />}
+              {isOverdue && <AlertTriangle size={13} title={`${Math.abs(days)} ${t('days_overdue')}`} />}
+              {isDueSoon && !isOverdue && <AlertTriangle size={13} title={`${t('days_until')} ${days} ${t('days_unit')}`} />}
             </span>
           );
         })()}
@@ -177,8 +180,8 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
       <td style={{ ...td, maxWidth: 180 }}>
         {action.needs_reassignment ? (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#D97706', background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.25)', borderRadius: 6, padding: '3px 8px' }}
-            title="Gebruiker verwijderd — wijs opnieuw toe via bewerken">
-            ⚠ Eigenaar ontbreekt
+            title={t('owner_missing_tip')}>
+            ⚠ {t('owner_missing')}
           </span>
         ) : (
           <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: COLORS.textSecondary }} title={action.assigned_to_email}>
@@ -196,7 +199,7 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
       <td style={{ ...td, textAlign: 'center' }}>
         {action.outlook_task_id ? (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: COLORS.success, fontWeight: 600 }} title={`ID: ${action.outlook_task_id}`}>
-            <RefreshCw size={12} /> Sync
+            <RefreshCw size={12} /> {t('sync_label')}
           </span>
         ) : (
           <span style={{ color: COLORS.border, fontSize: 12 }}>—</span>
@@ -217,7 +220,7 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
           style={{ background: 'none', border: 'none', padding: '5px', borderRadius: 6, color: COLORS.muted, cursor: 'pointer', display: 'inline-flex', transition: 'color 140ms ease', marginRight: 4 }}
           onMouseEnter={e => e.currentTarget.style.color = COLORS.blue}
           onMouseLeave={e => e.currentTarget.style.color = COLORS.muted}
-          title="Bewerk actie"
+          title={t('edit_action')}
         >
           <Pencil size={15} />
         </button>
@@ -226,7 +229,7 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
           style={{ background: 'none', border: 'none', padding: '5px', borderRadius: 6, color: COLORS.muted, cursor: 'pointer', display: 'inline-flex', transition: 'color 140ms ease' }}
           onMouseEnter={e => e.currentTarget.style.color = COLORS.danger}
           onMouseLeave={e => e.currentTarget.style.color = COLORS.muted}
-          title="Verwijder actie"
+          title={t('delete_action')}
         >
           <Trash2 size={15} />
         </button>

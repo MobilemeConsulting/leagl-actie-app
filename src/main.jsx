@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+import { LanguageProvider } from './context/LanguageContext.jsx';
 
 const path = window.location.pathname;
 
@@ -9,15 +10,17 @@ async function mount() {
 
   if (path === '/admin') {
     const { default: AdminDashboard } = await import('./pages/AdminDashboard.jsx');
-    root.render(<AdminDashboard />);
+    root.render(<LanguageProvider><AdminDashboard /></LanguageProvider>);
   } else if (path === '/superadmin') {
     const { default: SuperAdminDashboard } = await import('./pages/SuperAdminDashboard.jsx');
-    root.render(<SuperAdminDashboard />);
+    root.render(<LanguageProvider><SuperAdminDashboard /></LanguageProvider>);
   } else {
     const { default: App } = await import('./App.jsx');
     root.render(
       <React.StrictMode>
-        <App />
+        <LanguageProvider>
+          <App />
+        </LanguageProvider>
       </React.StrictMode>
     );
   }

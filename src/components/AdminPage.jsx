@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient.js';
 import { Users, ClipboardList, CheckCircle2, Clock, Circle, RefreshCw } from 'lucide-react';
 import { useTenantContext } from '../context/TenantContext.jsx';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 // eslint-disable-next-line
 async function _unused() {
@@ -137,6 +138,7 @@ function BarChart({ data, colorFn }) {
 
 export default function AdminPage({ session }) {
   const { tenant } = useTenantContext();
+  const { t } = useLanguage();
   const [actions, setActions]       = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -182,7 +184,7 @@ if (loading) {
   // Per assignee
   const assigneeMap = {};
   actions.forEach(a => {
-    const key = a.assigned_to_email || 'Niet toegewezen';
+    const key = a.assigned_to_email || t('not_assigned_label');
     assigneeMap[key] = (assigneeMap[key] || 0) + 1;
   });
   const byAssignee = Object.entries(assigneeMap)
@@ -201,31 +203,31 @@ if (loading) {
 
       {/* ── Stat cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
-        <StatCard icon={<ClipboardList size={20} />} label="Totaal acties"      value={total}       color={C.blue} />
-        <StatCard icon={<Circle size={20} />}        label="Open"               value={open}        color={C.blue} />
-        <StatCard icon={<Clock size={20} />}         label="In behandeling"     value={inProgress}  color={C.warning} />
-        <StatCard icon={<CheckCircle2 size={20} />}  label="Afgerond"           value={completed}   color={C.success} />
-        <StatCard icon={<RefreshCw size={20} />}     label="Gem. voortgang"     value={`${avgProgress}%`} color={C.accent} />
-        <StatCard icon={<Users size={20} />}         label="Teamleden actief"   value={teamEmails.length} color="#7C3AED" />
+        <StatCard icon={<ClipboardList size={20} />} label={t('stat_total')}       value={total}       color={C.blue} />
+        <StatCard icon={<Circle size={20} />}        label={t('stat_open')}        value={open}        color={C.blue} />
+        <StatCard icon={<Clock size={20} />}         label={t('stat_in_progress')} value={inProgress}  color={C.warning} />
+        <StatCard icon={<CheckCircle2 size={20} />}  label={t('stat_completed')}   value={completed}   color={C.success} />
+        <StatCard icon={<RefreshCw size={20} />}     label={t('stat_avg')}         value={`${avgProgress}%`} color={C.accent} />
+        <StatCard icon={<Users size={20} />}         label={t('stat_members')}     value={teamEmails.length} color="#7C3AED" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
         {/* ── Per categorie ── */}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 18, letterSpacing: '-0.01em' }}>Acties per categorie</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 18, letterSpacing: '-0.01em' }}>{t('chart_by_cat')}</div>
           {byCat.length > 0
             ? <BarChart data={byCat} colorFn={i => catColors[i % catColors.length]} />
-            : <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '20px 0' }}>Geen data</div>
+            : <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '20px 0' }}>{t('chart_no_data')}</div>
           }
         </div>
 
         {/* ── Per persoon ── */}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 18, letterSpacing: '-0.01em' }}>Acties per persoon</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 18, letterSpacing: '-0.01em' }}>{t('chart_by_person')}</div>
           {byAssignee.length > 0
             ? <BarChart data={byAssignee} colorFn={() => '#4263EB'} />
-            : <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '20px 0' }}>Geen data</div>
+            : <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '20px 0' }}>{t('chart_no_data')}</div>
           }
         </div>
       </div>
@@ -233,14 +235,14 @@ if (loading) {
       {/* ── Status verdeling ── */}
       {total > 0 && (
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16, letterSpacing: '-0.01em' }}>Status verdeling</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16, letterSpacing: '-0.01em' }}>{t('chart_status_dist')}</div>
           <div style={{ display: 'flex', height: 28, borderRadius: 8, overflow: 'hidden', gap: 2 }}>
-            {open > 0        && <div title={`Open: ${open}`}            style={{ flex: open,       background: C.blue,    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 700 }}>{Math.round(open/total*100)}%</div>}
-            {inProgress > 0  && <div title={`In behandeling: ${inProgress}`} style={{ flex: inProgress, background: C.warning, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 700 }}>{Math.round(inProgress/total*100)}%</div>}
-            {completed > 0   && <div title={`Afgerond: ${completed}`}   style={{ flex: completed,  background: C.success, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 700 }}>{Math.round(completed/total*100)}%</div>}
+            {open > 0        && <div title={`${t('stat_open')}: ${open}`}            style={{ flex: open,       background: C.blue,    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 700 }}>{Math.round(open/total*100)}%</div>}
+            {inProgress > 0  && <div title={`${t('stat_in_progress')}: ${inProgress}`} style={{ flex: inProgress, background: C.warning, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 700 }}>{Math.round(inProgress/total*100)}%</div>}
+            {completed > 0   && <div title={`${t('stat_completed')}: ${completed}`}   style={{ flex: completed,  background: C.success, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 700 }}>{Math.round(completed/total*100)}%</div>}
           </div>
           <div style={{ display: 'flex', gap: 20, marginTop: 10 }}>
-            {[['Open', C.blue, open], ['In behandeling', C.warning, inProgress], ['Afgerond', C.success, completed]].map(([label, color, val]) => (
+            {[[t('stat_open'), C.blue, open], [t('stat_in_progress'), C.warning, inProgress], [t('stat_completed'), C.success, completed]].map(([label, color, val]) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted }}>
                 <div style={{ width: 10, height: 10, borderRadius: 3, background: color }} />
                 {label} ({val})

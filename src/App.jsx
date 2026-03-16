@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, LogOut, ClipboardList, Loader2, CheckSquare, ListTodo, LayoutDashboard, Users, Search, X } from 'lucide-react';
 import { supabase, signOut } from './supabaseClient.js';
 import { TenantProvider, useTenantContext } from './context/TenantContext.jsx';
+import { useLanguage } from './context/LanguageContext.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import ActionCard from './components/ActionCard.jsx';
 import ActionTable from './components/ActionTable.jsx';
@@ -73,16 +74,24 @@ const COLORS = {
   text: '#141210', muted: '#8A8480', success: '#2D9E5A',
 };
 
-const NAV_ITEMS = [
-  { id: 'admin',  label: 'Dashboard',       icon: <LayoutDashboard size={16} /> },
-  { id: 'open',   label: 'Actieve Acties',  icon: <ListTodo size={16} /> },
-  { id: 'closed', label: 'Afgerond',        icon: <CheckSquare size={16} /> },
-  { id: 'team',   label: 'Team',            icon: <Users size={16} /> },
-];
+const NAV_IDS = ['admin', 'open', 'closed', 'team'];
+const NAV_ICONS = {
+  admin:  <LayoutDashboard size={16} />,
+  open:   <ListTodo size={16} />,
+  closed: <CheckSquare size={16} />,
+  team:   <Users size={16} />,
+};
+const NAV_KEY = {
+  admin:  'nav_dashboard',
+  open:   'nav_active',
+  closed: 'nav_completed',
+  team:   'nav_team',
+};
 
 // ── AppShell uses TenantContext ────────────────────────────────────────────
 function AppShell({ session, onSignOut }) {
   const { tenant, needsPicker, tenantError, tenantLoading } = useTenantContext();
+  const { lang, setLang, t } = useLanguage();
 
   const [actions, setActions]       = useState([]);
   const [categories, setCategories] = useState([]);
@@ -180,7 +189,7 @@ function AppShell({ session, onSignOut }) {
     if (error) throw error;
     await loadActions();
     setShowForm(false);
-    showToast('Actie aangemaakt');
+    showToast(t('toast_created'));
     writeLog({ actionId: data?.id, actionSubject: formData.subject, changeType: 'aangemaakt', newValue: `Toegewezen aan: ${formData.assigned_to_email || '—'}` });
     if (formData.assigned_to_email) {
       sendAssignmentEmail({
@@ -227,7 +236,7 @@ function AppShell({ session, onSignOut }) {
     if (error) throw error;
     setActions(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
     setEditAction(null);
-    showToast('Actie bijgewerkt');
+    showToast(t('toast_updated'));
     const fields = [
       { key: 'subject',           label: 'onderwerp' },
       { key: 'status',            label: 'status' },
@@ -244,12 +253,12 @@ function AppShell({ session, onSignOut }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Weet je zeker dat je deze actie wilt verwijderen?')) return;
+    if (!window.confirm(t('confirm_delete'))) return;
     const action = actions.find(a => a.id === id);
     const { error } = await supabase.from('actions').delete().eq('id', id);
     if (error) return;
     setActions(prev => prev.filter(a => a.id !== id));
-    showToast('Actie verwijderd', 'info');
+    showToast(t('toast_deleted'), 'info');
     writeLog({ actionId: id, actionSubject: action?.subject, changeType: 'verwijderd', oldValue: action?.status });
   };
 
@@ -259,7 +268,7 @@ function AppShell({ session, onSignOut }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: COLORS.bg }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ width: 36, height: 36, border: `3px solid ${COLORS.border}`, borderTopColor: COLORS.accent, borderRadius: '50%', margin: '0 auto 14px', animation: 'spin 0.8s linear infinite' }} />
-          <div style={{ fontSize: 14, color: COLORS.muted }}>Organisatie laden...</div>
+          <div style={{ fontSize: 14, color: COLORS.muted }}>{t('loading_org')}</div>
         </div>
       </div>
     );
@@ -270,11 +279,11 @@ function AppShell({ session, onSignOut }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: COLORS.bg }}>
         <div style={{ maxWidth: 400, textAlign: 'center', padding: 24 }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>⚠️</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.text, marginBottom: 8 }}>Geen toegang</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.text, marginBottom: 8 }}>{t('no_access')}</div>
           <div style={{ fontSize: 13, color: COLORS.muted, marginBottom: 24, lineHeight: 1.6 }}>{tenantError}</div>
           <button onClick={onSignOut}
             style={{ background: COLORS.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            Uitloggen
+            {t('nav_sign_out')}
           </button>
         </div>
       </div>
@@ -310,7 +319,8 @@ function AppShell({ session, onSignOut }) {
   });
   const openCount   = actions.filter(a => a.status === 'Open' || a.status === 'In Progress').length;
   const closedCount = actions.filter(a => a.status === 'Completed').length;
-  const currentNavItem = NAV_ITEMS.find(n => n.id === view);
+  const navItems = NAV_IDS.map(id => ({ id, label: t(NAV_KEY[id]), icon: NAV_ICONS[id] }));
+  const currentNavItem = navItems.find(n => n.id === view);
 
   return (
     <div className="app-shell">
@@ -324,12 +334,12 @@ function AppShell({ session, onSignOut }) {
           ) : (
             <div style={{ fontSize: 20, fontWeight: 800, color: accentColor, letterSpacing: '0.12em' }}>{brandName}</div>
           )}
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: 4 }}>Actie Platform</div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: 4 }}>{t('nav_subtitle')}</div>
         </div>
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: '10px 10px', overflowY: 'auto' }}>
-          {NAV_ITEMS.map(n => {
+          {navItems.map(n => {
             const isActive = view === n.id;
             const count = n.id === 'open' ? openCount : n.id === 'closed' ? closedCount : null;
             return (
@@ -355,12 +365,21 @@ function AppShell({ session, onSignOut }) {
             onMouseLeave={e => e.currentTarget.style.background = accentColor + '18'}
           >
             <Plus size={16} />
-            Nieuwe Actie
+            {t('nav_new_action')}
           </button>
         </nav>
 
         {/* Footer */}
         <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          {/* Language switcher */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+            {['nl', 'fr', 'en'].map(l => (
+              <button key={l} onClick={() => setLang(l)}
+                style={{ flex: 1, padding: '4px 0', fontSize: 11, fontWeight: lang === l ? 700 : 400, background: lang === l ? 'rgba(255,255,255,0.12)' : 'transparent', color: lang === l ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.30)', border: `1px solid ${lang === l ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 6, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em', transition: 'all 140ms ease' }}>
+                {l}
+              </button>
+            ))}
+          </div>
           {session?.user?.email && (
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={session.user.email}>
               {session.user.email}
@@ -373,7 +392,7 @@ function AppShell({ session, onSignOut }) {
             onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.32)'}
           >
             <LogOut size={13} />
-            Uitloggen
+            {t('nav_sign_out')}
           </button>
         </div>
       </div>
@@ -399,7 +418,7 @@ function AppShell({ session, onSignOut }) {
               onMouseLeave={e => e.currentTarget.style.background = COLORS.blue}
             >
               <Plus size={15} />
-              Nieuwe Actie
+              {t('nav_new_action')}
             </button>
           )}
         </div>
@@ -417,7 +436,7 @@ function AppShell({ session, onSignOut }) {
                 <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: COLORS.muted, pointerEvents: 'none' }} />
                 <input
                   type="text"
-                  placeholder="Zoek onderwerp..."
+                  placeholder={t('search_placeholder')}
                   value={filterSubject}
                   onChange={e => setFilterSubject(e.target.value)}
                   style={{ width: '100%', paddingLeft: 32, paddingRight: filterSubject ? 28 : 10, paddingTop: 7, paddingBottom: 7, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13, color: COLORS.text, outline: 'none', boxSizing: 'border-box' }}
@@ -435,7 +454,7 @@ function AppShell({ session, onSignOut }) {
                 onChange={e => setFilterCategory(e.target.value)}
                 style={{ flex: '1 1 140px', minWidth: 120, padding: '7px 10px', background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13, color: filterCategory ? COLORS.text : COLORS.muted, outline: 'none', cursor: 'pointer' }}
               >
-                <option value="">Alle categorieën</option>
+                <option value="">{t('all_categories')}</option>
                 {/* Dedupliceer op naam — toon elke categorienaam maar één keer */}
                 {categories
                   .filter((c, idx, arr) => arr.findIndex(x => x.name === c.name) === idx)
@@ -449,9 +468,9 @@ function AppShell({ session, onSignOut }) {
                   onChange={e => setFilterStatus(e.target.value)}
                   style={{ flex: '1 1 130px', minWidth: 110, padding: '7px 10px', background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13, color: filterStatus ? COLORS.text : COLORS.muted, outline: 'none', cursor: 'pointer' }}
                 >
-                  <option value="">Alle statussen</option>
-                  <option value="Open">Open</option>
-                  <option value="In Progress">In behandeling</option>
+                  <option value="">{t('all_statuses')}</option>
+                  <option value="Open">{t('status_open')}</option>
+                  <option value="In Progress">{t('status_in_progress')}</option>
                 </select>
               )}
 
@@ -461,7 +480,7 @@ function AppShell({ session, onSignOut }) {
                   onClick={() => { setFilterSubject(''); setFilterCategory(''); setFilterStatus(''); }}
                   style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', background: COLORS.surface2, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 12, color: COLORS.muted, cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
-                  <X size={13} /> Reset filters
+                  <X size={13} /> {t('reset_filters')}
                 </button>
               )}
             </div>
@@ -472,20 +491,20 @@ function AppShell({ session, onSignOut }) {
               <ClipboardList size={56} style={{ color: COLORS.border, marginBottom: 20 }} />
               {(filterSubject || filterCategory || filterStatus) ? (
                 <>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: COLORS.text, marginBottom: 6 }}>Geen resultaten</div>
-                  <div style={{ fontSize: 14, color: COLORS.muted, marginBottom: 16 }}>Geen acties gevonden voor de geselecteerde filters.</div>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: COLORS.text, marginBottom: 6 }}>{t('no_results')}</div>
+                  <div style={{ fontSize: 14, color: COLORS.muted, marginBottom: 16 }}>{t('no_results_sub')}</div>
                   <button onClick={() => { setFilterSubject(''); setFilterCategory(''); setFilterStatus(''); }}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: COLORS.blue, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                    <X size={14} /> Reset filters
+                    <X size={14} /> {t('reset_filters')}
                   </button>
                 </>
               ) : (
                 <>
                   <div style={{ fontSize: 18, fontWeight: 600, color: COLORS.text, marginBottom: 6 }}>
-                    {view === 'open' ? 'Geen actieve acties' : 'Geen afgeronde acties'}
+                    {view === 'open' ? t('no_active') : t('no_completed')}
                   </div>
                   <div style={{ fontSize: 14, color: COLORS.muted }}>
-                    {view === 'open' ? 'Klik op "Nieuwe Actie" om te beginnen.' : 'Afgeronde acties verschijnen hier.'}
+                    {view === 'open' ? t('no_active_sub') : t('no_completed_sub')}
                   </div>
                 </>
               )}
@@ -591,7 +610,7 @@ export default function App() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#F7F5F2' }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ width: 36, height: 36, border: '3px solid #E4E1DC', borderTopColor: '#C8A96E', borderRadius: '50%', margin: '0 auto 14px', animation: 'spin 0.8s linear infinite' }} />
-          <div style={{ fontSize: 14, color: '#8A8480' }}>Laden...</div>
+          <div style={{ fontSize: 14, color: '#8A8480' }}>{/* loading text shown before language context is ready */}Laden...</div>
         </div>
       </div>
     );

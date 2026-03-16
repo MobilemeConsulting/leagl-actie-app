@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, User, Lock, Trash2, Pencil, ChevronRight, CheckCircle2, Clock, Circle, AlertTriangle } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const STATUS_SEQUENCE = ['Open', 'In Progress', 'Completed'];
 
 const STATUS_CONFIG = {
-  'Open':        { color: '#4263EB', bg: 'rgba(66,99,235,0.08)',  border: 'rgba(66,99,235,0.20)',  label: 'Open' },
-  'In Progress': { color: '#D97706', bg: 'rgba(217,119,6,0.08)',  border: 'rgba(217,119,6,0.20)',  label: 'In behandeling' },
-  'Completed':   { color: '#2D9E5A', bg: 'rgba(45,158,90,0.08)',  border: 'rgba(45,158,90,0.20)',  label: 'Afgerond' },
+  'Open':        { color: '#4263EB', bg: 'rgba(66,99,235,0.08)',  border: 'rgba(66,99,235,0.20)',  labelKey: 'status_open' },
+  'In Progress': { color: '#D97706', bg: 'rgba(217,119,6,0.08)',  border: 'rgba(217,119,6,0.20)',  labelKey: 'status_in_progress' },
+  'Completed':   { color: '#2D9E5A', bg: 'rgba(45,158,90,0.08)',  border: 'rgba(45,158,90,0.20)',  labelKey: 'status_completed' },
 };
 
 const COLORS = {
@@ -27,6 +28,7 @@ const getDaysUntilDeadline = (dateStr) => {
 };
 
 export default function ActionCard({ action, categories, onStatusChange, onProgressChange, onDelete, onEdit }) {
+  const { t } = useLanguage();
   const [localProgress, setLocalProgress] = useState(action.percent_delivery ?? 0);
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
       {/* Header */}
       <div style={{ background: cfg.bg, borderBottom: `1px solid ${cfg.border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: 6, padding: '3px 9px', letterSpacing: 0.4 }}>
-          {cfg.label}
+          {t(cfg.labelKey)}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {action.is_private && <Lock size={14} style={{ color: COLORS.muted }} title="Privé actie" />}
@@ -66,7 +68,7 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
             style={{ background: 'none', border: 'none', padding: '4px', borderRadius: 6, color: COLORS.muted, cursor: 'pointer', display: 'flex', transition: 'color 140ms ease' }}
             onMouseEnter={e => e.currentTarget.style.color = '#4263EB'}
             onMouseLeave={e => e.currentTarget.style.color = COLORS.muted}
-            title="Bewerk actie"
+            title={t('edit_action')}
           >
             <Pencil size={15} />
           </button>
@@ -75,7 +77,7 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
             style={{ background: 'none', border: 'none', padding: '4px', borderRadius: 6, color: COLORS.muted, cursor: 'pointer', display: 'flex', transition: 'color 140ms ease' }}
             onMouseEnter={e => e.currentTarget.style.color = COLORS.danger}
             onMouseLeave={e => e.currentTarget.style.color = COLORS.muted}
-            title="Verwijder actie"
+            title={t('delete_action')}
           >
             <Trash2 size={15} />
           </button>
@@ -101,14 +103,14 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
             return (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: deadlineColor, fontWeight: (isOverdue || isDueSoon) ? 600 : 400 }}>
                 <Calendar size={12} /> {formatDate(action.due_date)}
-                {isOverdue && <AlertTriangle size={12} title={`${Math.abs(days)} dag(en) verlopen`} />}
-                {isDueSoon && !isOverdue && <AlertTriangle size={12} title={`Verloopt over ${days} dag(en)`} />}
+                {isOverdue && <AlertTriangle size={12} title={`${Math.abs(days)} ${t('days_overdue')}`} />}
+                {isDueSoon && !isOverdue && <AlertTriangle size={12} title={`${t('days_until')} ${days} ${t('days_unit')}`} />}
               </span>
             );
           })()}
           {action.needs_reassignment ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#D97706', fontWeight: 600 }}>
-              ⚠ Eigenaar ontbreekt
+              ⚠ {t('owner_missing')}
             </span>
           ) : action.assigned_to_email ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -117,7 +119,7 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
           ) : null}
           {action.status === 'Completed' && action.completed_at && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#2D9E5A' }}>
-              <CheckCircle2 size={12} /> Afgerond {formatDate(action.completed_at)}
+              <CheckCircle2 size={12} /> {t('completed_on')} {formatDate(action.completed_at)}
             </span>
           )}
         </div>
@@ -125,7 +127,7 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
         {/* Progress */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 11, color: COLORS.muted, fontWeight: 500 }}>Voortgang</span>
+            <span style={{ fontSize: 11, color: COLORS.muted, fontWeight: 500 }}>{t('progress_label')}</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: cfg.color }}>{localProgress}%</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -151,7 +153,7 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
             onClick={() => onStatusChange(action.id, nextStatus)}
             style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 16px', background: cfg.color, color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: `0 2px 8px ${cfg.color}44` }}
           >
-            Markeer als {STATUS_CONFIG[nextStatus]?.label || nextStatus}
+            {t('mark_as')} {t(STATUS_CONFIG[nextStatus]?.labelKey) || nextStatus}
             <ChevronRight size={15} />
           </button>
         )}
