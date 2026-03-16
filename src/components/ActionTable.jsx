@@ -43,7 +43,7 @@ export default function ActionTable({ actions, categories, onStatusChange, onPro
               <th style={th}>Onderwerp</th>
               <th style={th}>Categorie</th>
               <th style={th}>Status</th>
-              <th style={th}>% Afg.</th>
+              <th style={th}>% Status</th>
               <th style={th}>Deadline</th>
               <th style={th}>Toegewezen aan</th>
               <th style={{ ...th, textAlign: 'center' }}>Privé</th>
@@ -86,8 +86,8 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
   const [hovered, setHovered] = React.useState(false);
 
   React.useEffect(() => {
-    setLocalProgress(action.percent_delivery ?? 0);
-  }, [action.percent_delivery]);
+    setLocalProgress(action.status === 'Completed' ? 100 : (action.percent_delivery ?? 0));
+  }, [action.percent_delivery, action.status]);
 
   const statusCfg = STATUS_COLOR[action.status] || STATUS_COLOR['Open'];
 

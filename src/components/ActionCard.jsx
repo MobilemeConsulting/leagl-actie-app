@@ -30,8 +30,8 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
   const [localProgress, setLocalProgress] = useState(action.percent_delivery ?? 0);
 
   useEffect(() => {
-    setLocalProgress(action.percent_delivery ?? 0);
-  }, [action.percent_delivery]);
+    setLocalProgress(action.status === 'Completed' ? 100 : (action.percent_delivery ?? 0));
+  }, [action.percent_delivery, action.status]);
 
   const cfg = STATUS_CONFIG[action.status] || STATUS_CONFIG['Open'];
   const categoryName = categories.find(c => c.id === action.category_id)?.name ?? '—';

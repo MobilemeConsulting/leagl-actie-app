@@ -122,7 +122,15 @@ function AppShell({ session, onSignOut }) {
       .select('*')
       .eq('tenant_id', tenant.id)
       .order('created_at', { ascending: false });
-    if (!error) setActions(data || []);
+    if (error) return;
+    const actions = data || [];
+    // Herstel: afgeronde acties moeten altijd 100% zijn
+    const toFix = actions.filter(a => a.status === 'Completed' && (a.percent_delivery || 0) < 100);
+    if (toFix.length > 0) {
+      await supabase.from('actions').update({ percent_delivery: 100 }).in('id', toFix.map(a => a.id));
+      toFix.forEach(a => { a.percent_delivery = 100; });
+    }
+    setActions(actions);
   }, [tenant?.id]);
 
   const loadCategories = useCallback(async () => {

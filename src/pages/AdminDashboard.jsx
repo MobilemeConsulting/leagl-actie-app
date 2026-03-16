@@ -706,7 +706,7 @@ export default function AdminDashboard() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {['#', 'Onderwerp', 'Categorie', 'Status', 'Voortgang', 'Deadline', 'Toegewezen aan', 'Aangemaakt'].map(h => (
+                        {['#', 'Onderwerp', 'Categorie', 'Status', '% Status', 'Deadline', 'Toegewezen aan', 'Aangemaakt'].map(h => (
                           <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
