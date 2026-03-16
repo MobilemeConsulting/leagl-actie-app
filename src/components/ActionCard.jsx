@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Calendar, User, Lock, Trash2, Pencil, ChevronRight, CheckCircle2, Clock, Circle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, User, Lock, Trash2, Pencil, ChevronRight, CheckCircle2, Clock, Circle, AlertTriangle } from 'lucide-react';
 
 const STATUS_SEQUENCE = ['Open', 'In Progress', 'Completed'];
 
@@ -19,8 +19,19 @@ const COLORS = {
   danger: '#E5383B',
 };
 
+const getDaysUntilDeadline = (dateStr) => {
+  if (!dateStr) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dl = new Date(dateStr); dl.setHours(0, 0, 0, 0);
+  return Math.ceil((dl - today) / 86400000);
+};
+
 export default function ActionCard({ action, categories, onStatusChange, onProgressChange, onDelete, onEdit }) {
   const [localProgress, setLocalProgress] = useState(action.percent_delivery ?? 0);
+
+  useEffect(() => {
+    setLocalProgress(action.percent_delivery ?? 0);
+  }, [action.percent_delivery]);
 
   const cfg = STATUS_CONFIG[action.status] || STATUS_CONFIG['Open'];
   const categoryName = categories.find(c => c.id === action.category_id)?.name ?? '—';
@@ -32,7 +43,11 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
     return new Date(dateStr).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  const handleProgressCommit = () => onProgressChange(action.id, localProgress);
+  const stepProgress = (delta) => {
+    const next = Math.min(100, Math.max(0, localProgress + delta));
+    setLocalProgress(next);
+    onProgressChange(action.id, next);
+  };
 
   return (
     <div style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', transition: 'box-shadow 160ms ease' }}
@@ -78,11 +93,19 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
           <span style={{ background: COLORS.accent + '18', color: COLORS.accent, border: `1px solid ${COLORS.accent}33`, borderRadius: 6, padding: '2px 8px', fontWeight: 600, fontSize: 11 }}>
             {categoryName}
           </span>
-          {action.due_date && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Calendar size={12} /> {formatDate(action.due_date)}
-            </span>
-          )}
+          {action.due_date && (() => {
+            const days = getDaysUntilDeadline(action.due_date);
+            const isOverdue = days < 0;
+            const isDueSoon = days >= 0 && days <= 3;
+            const deadlineColor = isOverdue ? '#E5383B' : isDueSoon ? '#D97706' : COLORS.muted;
+            return (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: deadlineColor, fontWeight: (isOverdue || isDueSoon) ? 600 : 400 }}>
+                <Calendar size={12} /> {formatDate(action.due_date)}
+                {isOverdue && <AlertTriangle size={12} title={`${Math.abs(days)} dag(en) verlopen`} />}
+                {isDueSoon && !isOverdue && <AlertTriangle size={12} title={`Verloopt over ${days} dag(en)`} />}
+              </span>
+            );
+          })()}
           {action.needs_reassignment ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#D97706', fontWeight: 600 }}>
               ⚠ Eigenaar ontbreekt
@@ -101,20 +124,24 @@ export default function ActionCard({ action, categories, onStatusChange, onProgr
 
         {/* Progress */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 11, color: COLORS.muted, fontWeight: 500 }}>Voortgang</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: cfg.color }}>{localProgress}%</span>
           </div>
-          <input
-            type="range" min="0" max="100" step="5"
-            value={localProgress}
-            onChange={e => setLocalProgress(Number(e.target.value))}
-            onMouseUp={handleProgressCommit}
-            onTouchEnd={handleProgressCommit}
-            style={{ width: '100%', cursor: 'pointer', accentColor: cfg.color }}
-          />
-          <div style={{ marginTop: 4, height: 4, background: COLORS.surface2, borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${localProgress}%`, background: cfg.color, borderRadius: 99, transition: 'width 300ms ease' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => stepProgress(-10)}
+              disabled={localProgress <= 0}
+              style={{ flex: 'none', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COLORS.surface2, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 16, fontWeight: 700, color: localProgress <= 0 ? COLORS.border : COLORS.text, cursor: localProgress <= 0 ? 'default' : 'pointer' }}
+            >−</button>
+            <div style={{ flex: 1, height: 6, background: COLORS.surface2, borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${localProgress}%`, background: cfg.color, borderRadius: 99, transition: 'width 300ms ease' }} />
+            </div>
+            <button
+              onClick={() => stepProgress(10)}
+              disabled={localProgress >= 100}
+              style={{ flex: 'none', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COLORS.surface2, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 16, fontWeight: 700, color: localProgress >= 100 ? COLORS.border : COLORS.text, cursor: localProgress >= 100 ? 'default' : 'pointer' }}
+            >+</button>
           </div>
         </div>
 

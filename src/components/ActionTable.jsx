@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, RefreshCw, Lock, Pencil } from 'lucide-react';
+import { Trash2, RefreshCw, Lock, Pencil, AlertTriangle } from 'lucide-react';
 
 const COLORS = {
   surface: '#FFFFFF',
@@ -74,16 +74,27 @@ export default function ActionTable({ actions, categories, onStatusChange, onPro
   );
 }
 
+const getDaysUntilDeadline = (dateStr) => {
+  if (!dateStr) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dl = new Date(dateStr); dl.setHours(0, 0, 0, 0);
+  return Math.ceil((dl - today) / 86400000);
+};
+
 function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate, onStatusChange, onProgressChange, onDelete, onEdit }) {
   const [localProgress, setLocalProgress] = React.useState(action.percent_delivery ?? 0);
   const [hovered, setHovered] = React.useState(false);
 
+  React.useEffect(() => {
+    setLocalProgress(action.percent_delivery ?? 0);
+  }, [action.percent_delivery]);
+
   const statusCfg = STATUS_COLOR[action.status] || STATUS_COLOR['Open'];
 
-  const handleProgressBlur = () => {
-    const clamped = Math.min(100, Math.max(0, localProgress));
-    setLocalProgress(clamped);
-    onProgressChange(action.id, clamped);
+  const stepProgress = (delta) => {
+    const next = Math.min(100, Math.max(0, localProgress + delta));
+    setLocalProgress(next);
+    onProgressChange(action.id, next);
   };
 
   const td = { padding: '10px 16px', borderBottom: `1px solid ${COLORS.border}`, verticalAlign: 'middle' };
@@ -127,22 +138,40 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
 
       {/* Progress */}
       <td style={{ ...td, whiteSpace: 'nowrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="number" min="0" max="100"
-            value={localProgress}
-            onChange={e => setLocalProgress(Number(e.target.value))}
-            onBlur={handleProgressBlur}
-            style={{ width: 52, background: COLORS.surface2, border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, textAlign: 'center', color: COLORS.text, outline: 'none' }}
-          />
-          <div style={{ width: 52, height: 4, background: COLORS.surface2, borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${localProgress}%`, background: COLORS.blue, borderRadius: 99 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <button
+            onClick={() => stepProgress(-10)}
+            disabled={localProgress <= 0}
+            style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COLORS.surface2, border: `1px solid ${COLORS.border}`, borderRadius: 5, fontSize: 14, fontWeight: 700, color: localProgress <= 0 ? COLORS.border : COLORS.text, cursor: localProgress <= 0 ? 'default' : 'pointer', flexShrink: 0 }}
+          >−</button>
+          <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.text, width: 34, textAlign: 'center' }}>{localProgress}%</span>
+          <button
+            onClick={() => stepProgress(10)}
+            disabled={localProgress >= 100}
+            style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COLORS.surface2, border: `1px solid ${COLORS.border}`, borderRadius: 5, fontSize: 14, fontWeight: 700, color: localProgress >= 100 ? COLORS.border : COLORS.text, cursor: localProgress >= 100 ? 'default' : 'pointer', flexShrink: 0 }}
+          >+</button>
+          <div style={{ width: 44, height: 4, background: COLORS.surface2, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+            <div style={{ height: '100%', width: `${localProgress}%`, background: COLORS.blue, borderRadius: 99, transition: 'width 200ms ease' }} />
           </div>
         </div>
       </td>
 
       {/* Due date */}
-      <td style={{ ...td, whiteSpace: 'nowrap', color: COLORS.textSecondary }}>{formatDate(action.due_date)}</td>
+      <td style={{ ...td, whiteSpace: 'nowrap' }}>
+        {(() => {
+          const days = getDaysUntilDeadline(action.due_date);
+          const isOverdue = days !== null && days < 0;
+          const isDueSoon = days !== null && days >= 0 && days <= 3;
+          const color = isOverdue ? COLORS.danger : isDueSoon ? COLORS.warning : COLORS.textSecondary;
+          return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color, fontWeight: (isOverdue || isDueSoon) ? 600 : 400 }}>
+              {formatDate(action.due_date)}
+              {isOverdue && <AlertTriangle size={13} title={`${Math.abs(days)} dag(en) verlopen`} />}
+              {isDueSoon && !isOverdue && <AlertTriangle size={13} title={`Verloopt over ${days} dag(en)`} />}
+            </span>
+          );
+        })()}
+      </td>
 
       {/* Assigned to */}
       <td style={{ ...td, maxWidth: 180 }}>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, LogOut, ClipboardList, Loader2, CheckSquare, ListTodo, LayoutDashboard, Users } from 'lucide-react';
+import { Plus, LogOut, ClipboardList, Loader2, CheckSquare, ListTodo, LayoutDashboard, Users, Search, X } from 'lucide-react';
 import { supabase, signOut } from './supabaseClient.js';
 import { TenantProvider, useTenantContext } from './context/TenantContext.jsx';
 import LoginPage from './components/LoginPage.jsx';
@@ -74,9 +74,9 @@ const COLORS = {
 };
 
 const NAV_ITEMS = [
-  { id: 'open',   label: 'Actieve Acties', icon: <ListTodo size={16} /> },
+  { id: 'admin',  label: 'Dashboard',       icon: <LayoutDashboard size={16} /> },
+  { id: 'open',   label: 'Actieve Acties',  icon: <ListTodo size={16} /> },
   { id: 'closed', label: 'Afgerond',        icon: <CheckSquare size={16} /> },
-  { id: 'admin',  label: 'Stats',           icon: <LayoutDashboard size={16} /> },
   { id: 'team',   label: 'Team',            icon: <Users size={16} /> },
 ];
 
@@ -87,7 +87,10 @@ function AppShell({ session, onSignOut }) {
   const [actions, setActions]       = useState([]);
   const [categories, setCategories] = useState([]);
   const [users, setUsers]           = useState([]);
-  const [view, setView]             = useState('open');
+  const [view, setView]             = useState('admin');
+  const [filterSubject, setFilterSubject]   = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterStatus, setFilterStatus]     = useState('');
   const [showForm, setShowForm]     = useState(false);
   const [editAction, setEditAction] = useState(null);
   const [isMobile, setIsMobile]     = useState(window.innerWidth < 768);
@@ -182,8 +185,12 @@ function AppShell({ session, onSignOut }) {
 
   const handleUpdateStatus = async (id, newStatus) => {
     const updates = { status: newStatus };
-    if (newStatus === 'Completed') updates.completed_at = new Date().toISOString();
-    else updates.completed_at = null;
+    if (newStatus === 'Completed') {
+      updates.completed_at = new Date().toISOString();
+      updates.percent_delivery = 100;
+    } else {
+      updates.completed_at = null;
+    }
     const { error } = await supabase.from('actions').update(updates).eq('id', id);
     if (error) return;
     const action = actions.find(a => a.id === id);
@@ -270,9 +277,22 @@ function AppShell({ session, onSignOut }) {
   const accentColor = tenant?.primary_color || COLORS.accent;
   const brandName   = tenant?.name || 'LEAGL';
 
-  const visibleActions = actions.filter(a =>
-    view === 'open' ? (a.status === 'Open' || a.status === 'In Progress') : a.status === 'Completed'
-  );
+  const handleSetView = (id) => {
+    setView(id);
+    setFilterSubject('');
+    setFilterCategory('');
+    setFilterStatus('');
+  };
+
+  const visibleActions = actions.filter(a => {
+    const matchesView = view === 'open'
+      ? (a.status === 'Open' || a.status === 'In Progress')
+      : a.status === 'Completed';
+    const matchesSubject  = !filterSubject  || a.subject.toLowerCase().includes(filterSubject.toLowerCase());
+    const matchesCategory = !filterCategory || a.category_id === filterCategory;
+    const matchesStatus   = !filterStatus   || a.status === filterStatus;
+    return matchesView && matchesSubject && matchesCategory && matchesStatus;
+  });
   const openCount   = actions.filter(a => a.status === 'Open' || a.status === 'In Progress').length;
   const closedCount = actions.filter(a => a.status === 'Completed').length;
   const currentNavItem = NAV_ITEMS.find(n => n.id === view);
@@ -299,7 +319,7 @@ function AppShell({ session, onSignOut }) {
             const count = n.id === 'open' ? openCount : n.id === 'closed' ? closedCount : null;
             return (
               <div key={n.id}
-                onClick={() => setView(n.id)}
+                onClick={() => handleSetView(n.id)}
                 style={{ padding: '9px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, borderRadius: 8, marginBottom: 2, background: isActive ? 'rgba(255,255,255,0.09)' : 'transparent', color: isActive ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.40)', fontSize: 13.5, fontWeight: isActive ? 600 : 400, transition: 'background 140ms ease, color 140ms ease', position: 'relative', userSelect: 'none' }}
                 onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.68)'; } }}
                 onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.40)'; } }}
@@ -373,6 +393,61 @@ function AppShell({ session, onSignOut }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px 12px' : '24px 28px' }}>
           {view === 'admin' && <AdminPage session={session} />}
           {view === 'team'  && <TeamPage />}
+
+          {/* Filter bar */}
+          {view !== 'admin' && view !== 'team' && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+              {/* Onderwerp zoeken */}
+              <div style={{ position: 'relative', flex: '1 1 180px', minWidth: 140 }}>
+                <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: COLORS.muted, pointerEvents: 'none' }} />
+                <input
+                  type="text"
+                  placeholder="Zoek onderwerp..."
+                  value={filterSubject}
+                  onChange={e => setFilterSubject(e.target.value)}
+                  style={{ width: '100%', paddingLeft: 32, paddingRight: filterSubject ? 28 : 10, paddingTop: 7, paddingBottom: 7, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13, color: COLORS.text, outline: 'none', boxSizing: 'border-box' }}
+                />
+                {filterSubject && (
+                  <button onClick={() => setFilterSubject('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: COLORS.muted, cursor: 'pointer', padding: 0, display: 'flex' }}>
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Categorie */}
+              <select
+                value={filterCategory}
+                onChange={e => setFilterCategory(e.target.value)}
+                style={{ flex: '1 1 140px', minWidth: 120, padding: '7px 10px', background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13, color: filterCategory ? COLORS.text : COLORS.muted, outline: 'none', cursor: 'pointer' }}
+              >
+                <option value="">Alle categorieën</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+
+              {/* Status (alleen actieve view) */}
+              {view === 'open' && (
+                <select
+                  value={filterStatus}
+                  onChange={e => setFilterStatus(e.target.value)}
+                  style={{ flex: '1 1 130px', minWidth: 110, padding: '7px 10px', background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13, color: filterStatus ? COLORS.text : COLORS.muted, outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="">Alle statussen</option>
+                  <option value="Open">Open</option>
+                  <option value="In Progress">In behandeling</option>
+                </select>
+              )}
+
+              {/* Reset */}
+              {(filterSubject || filterCategory || filterStatus) && (
+                <button
+                  onClick={() => { setFilterSubject(''); setFilterCategory(''); setFilterStatus(''); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', background: COLORS.surface2, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 12, color: COLORS.muted, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  <X size={13} /> Reset filters
+                </button>
+              )}
+            </div>
+          )}
 
           {view !== 'admin' && view !== 'team' && visibleActions.length === 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }} className="fade-in">

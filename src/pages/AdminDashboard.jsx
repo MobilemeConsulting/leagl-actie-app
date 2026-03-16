@@ -220,6 +220,7 @@ export default function AdminDashboard() {
   const [loading, setLoading]             = useState(false);
   const [toast, setToast]                 = useState(null);
   const [tenantsList, setTenantsList]     = useState([]); // for name/color lookup
+  const [adminEmail, setAdminEmail]       = useState('');
 
   // Create user form
   const [newEmail, setNewEmail]   = useState('');
@@ -232,8 +233,9 @@ export default function AdminDashboard() {
   const [actionSearch, setActionSearch] = useState('');
 
   // Logs
-  const [logs, setLogs]           = useState([]);
+  const [logs, setLogs]             = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [logFilter, setLogFilter]    = useState('all'); // 'all' | 'actions' | 'users'
 
   function showToast(msg, type = 'success') {
     setToast({ msg, type });
@@ -244,6 +246,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { setUserTenants([]); return; }
+      setAdminEmail(session.user.email || '');
       const { data: memberships } = await adminSupabase
         .from('tenant_users')
         .select('tenant_id, role, tenants(id, slug, name, logo_url, primary_color)')
@@ -284,6 +287,23 @@ export default function AdminDashboard() {
 
   useEffect(() => { if (selectedTenantId) { loadData(); loadLogs(); } }, [selectedTenantId]);
 
+  const writeUserLog = useCallback(async ({ changeType, targetEmail, oldValue, newValue }) => {
+    if (!selectedTenantId) return;
+    try {
+      await adminSupabase.from('action_logs').insert([{
+        action_id: null,
+        action_subject: targetEmail,
+        changed_by_email: adminEmail || 'admin',
+        change_type: changeType,
+        old_value: oldValue ?? null,
+        new_value: newValue ?? null,
+        tenant_id: selectedTenantId,
+      }]);
+    } catch (e) {
+      console.warn('User log mislukt:', e.message);
+    }
+  }, [selectedTenantId, adminEmail]);
+
   async function createUser(e) {
     e.preventDefault();
     if (!newEmail.trim() || !selectedTenantId) return;
@@ -312,7 +332,11 @@ export default function AdminDashboard() {
 
       // Stuur welkomstmail met tijdelijk wachtwoord (non-blocking)
       sendWelcomeEmail({ to: newEmail.trim(), tempPassword: tempPw, name: newName.trim(), role: 'member', tenantName: activeTenant?.name || 'LEAGL' })
-        .then(() => showToast(`Welkomstmail verstuurd naar ${newEmail.trim()}`))
+        .then(async () => {
+          showToast(`Welkomstmail verstuurd naar ${newEmail.trim()}`);
+          await writeUserLog({ changeType: 'uitnodiging verstuurd', targetEmail: newEmail.trim(), newValue: newName.trim() || null });
+          await loadLogs();
+        })
         .catch(e => showToast(`Gebruiker aangemaakt maar mail mislukt: ${e.message}`, 'error'));
 
       setNewEmail(''); setNewName(''); setNewPw('');
@@ -336,7 +360,8 @@ export default function AdminDashboard() {
       .eq('tenant_id', selectedTenantId);
     showToast(`Gebruiker ${email} verwijderd — open acties gemarkeerd`);
     setUsers(prev => prev.filter(u => u.id !== userId));
-    await loadData();
+    await writeUserLog({ changeType: 'gebruiker verwijderd', targetEmail: email });
+    await Promise.all([loadData(), loadLogs()]);
   }
 
   async function toggleBan(user) {
@@ -345,8 +370,10 @@ export default function AdminDashboard() {
       ban_duration: isBanned ? 'none' : '87600h', // 10 years = effectively permanent
     });
     if (error) { showToast(error.message, 'error'); return; }
+    const label = isBanned ? 'gebruiker geactiveerd' : 'gebruiker gedeactiveerd';
     showToast(isBanned ? `${user.email} geactiveerd` : `${user.email} gedeactiveerd`);
-    await loadData();
+    await writeUserLog({ changeType: label, targetEmail: user.email });
+    await Promise.all([loadData(), loadLogs()]);
   }
 
   async function resetPassword(userId, email) {
@@ -589,7 +616,7 @@ export default function AdminDashboard() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {['E-mail', 'Provider', 'Aangemaakt', 'Laatste login', 'Status', 'Acties'].map(h => (
+                        {['E-mail', 'Provider', 'Aangemaakt', 'Laatste login', 'Onboarding', 'Status', 'Acties'].map(h => (
                           <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
@@ -611,6 +638,17 @@ export default function AdminDashboard() {
                             </td>
                             <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12 }}>{formatDate(user.created_at)}</td>
                             <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12 }}>{user.last_sign_in_at ? timeAgo(user.last_sign_in_at) : '—'}</td>
+                            <td style={{ padding: '10px 16px' }}>
+                              {user.last_sign_in_at ? (
+                                <span style={{ fontSize: 11, fontWeight: 700, background: C.success + '12', color: C.success, border: `1px solid ${C.success}30`, borderRadius: 6, padding: '2px 8px' }}>
+                                  Ingelogd
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 11, fontWeight: 700, background: C.warning + '12', color: C.warning, border: `1px solid ${C.warning}30`, borderRadius: 6, padding: '2px 8px' }}>
+                                  Nog niet ingelogd
+                                </span>
+                              )}
+                            </td>
                             <td style={{ padding: '10px 16px' }}>
                               <span style={{ fontSize: 11, fontWeight: 700, background: isBanned ? C.danger + '12' : C.success + '12', color: isBanned ? C.danger : C.success, border: `1px solid ${isBanned ? C.danger + '30' : C.success + '30'}`, borderRadius: 6, padding: '2px 8px' }}>
                                 {isBanned ? 'Inactief' : 'Actief'}
@@ -718,78 +756,136 @@ export default function AdminDashboard() {
           )}
 
           {/* ── Logs tab ── */}
-          {activeNav === 'logs' && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Audit Log</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Alle wijzigingen aan acties — wie, wat en wanneer</div>
-                </div>
-                <button onClick={loadLogs} disabled={logsLoading}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
-                  <RefreshCw size={13} style={{ animation: logsLoading ? 'spin 0.8s linear infinite' : 'none' }} /> Vernieuwen
-                </button>
-              </div>
-
-              {logsLoading ? (
-                <div style={{ textAlign: 'center', padding: '60px 0' }}>
-                  <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.accent, borderRadius: '50%', margin: '0 auto', animation: 'spin 0.8s linear infinite' }} />
-                </div>
-              ) : logs.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '60px 0', color: C.muted, fontSize: 13 }}>Nog geen log-entries. Wijzig een actie om te beginnen.</div>
-              ) : (
-                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                      <thead>
-                        <tr>
-                          {['Tijdstip', 'Door', 'Wijziging', 'Actie', 'Van', 'Naar'].map(h => (
-                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {logs.map((log, i) => {
-                          const typeColors = {
-                            'status':       C.blue,
-                            'voortgang':    C.accent,
-                            'aangemaakt':   C.success,
-                            'verwijderd':   C.danger,
-                            'toegewezen aan': '#7C3AED',
-                          };
-                          const typeColor = typeColors[log.change_type] || C.muted;
-                          return (
-                            <tr key={log.id} style={{ background: i % 2 === 0 ? C.surface : C.surface2 }}>
-                              <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', color: C.muted, fontSize: 12 }}>
-                                {new Date(log.created_at).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                              </td>
-                              <td style={{ padding: '10px 16px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: C.textSec, fontSize: 12 }} title={log.changed_by_email}>
-                                {log.changed_by_email}
-                              </td>
-                              <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, background: typeColor + '14', color: typeColor, border: `1px solid ${typeColor}30`, borderRadius: 5, padding: '2px 8px', textTransform: 'capitalize' }}>
-                                  {log.change_type}
-                                </span>
-                              </td>
-                              <td style={{ padding: '10px 16px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500, color: C.text }} title={log.action_subject}>
-                                {log.action_subject || '—'}
-                              </td>
-                              <td style={{ padding: '10px 16px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: C.muted, fontSize: 12 }} title={log.old_value}>
-                                {log.old_value || '—'}
-                              </td>
-                              <td style={{ padding: '10px 16px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: C.text, fontSize: 12, fontWeight: 500 }} title={log.new_value}>
-                                {log.new_value || '—'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+          {activeNav === 'logs' && (() => {
+            const USER_TYPES = ['uitnodiging verstuurd', 'gebruiker verwijderd', 'gebruiker gedeactiveerd', 'gebruiker geactiveerd'];
+            const filteredLogs = logs.filter(log => {
+              if (logFilter === 'actions') return !USER_TYPES.includes(log.change_type);
+              if (logFilter === 'users')   return USER_TYPES.includes(log.change_type);
+              return true;
+            });
+            const typeColors = {
+              'status':                  C.blue,
+              'voortgang':               C.accent,
+              'aangemaakt':              C.success,
+              'verwijderd':              C.danger,
+              'toegewezen aan':          C.purple,
+              'uitnodiging verstuurd':   '#0EA5E9',
+              'gebruiker verwijderd':    C.danger,
+              'gebruiker gedeactiveerd': C.warning,
+              'gebruiker geactiveerd':   C.success,
+            };
+            return (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Activiteitenlog</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Acties, uitnodigingen en gebruikersbeheer — wie, wat en wanneer</div>
                   </div>
+                  <button onClick={loadLogs} disabled={logsLoading}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
+                    <RefreshCw size={13} style={{ animation: logsLoading ? 'spin 0.8s linear infinite' : 'none' }} /> Vernieuwen
+                  </button>
                 </div>
-              )}
-            </div>
-          )}
+
+                {/* Filter tabs */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+                  {[
+                    { id: 'all',     label: 'Alle activiteit',           count: logs.length },
+                    { id: 'actions', label: 'Actie wijzigingen',         count: logs.filter(l => !USER_TYPES.includes(l.change_type)).length },
+                    { id: 'users',   label: 'Gebruikers & Uitnodigingen', count: logs.filter(l => USER_TYPES.includes(l.change_type)).length },
+                  ].map(tab => (
+                    <button key={tab.id} onClick={() => setLogFilter(tab.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1px solid ${logFilter === tab.id ? C.blue : C.border}`, background: logFilter === tab.id ? C.blue : C.surface, color: logFilter === tab.id ? '#fff' : C.muted, transition: 'all 140ms' }}>
+                      {tab.label}
+                      <span style={{ fontSize: 11, background: logFilter === tab.id ? 'rgba(255,255,255,0.2)' : C.surface2, borderRadius: 10, padding: '0 6px' }}>{tab.count}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {logsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '60px 0' }}>
+                    <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.accent, borderRadius: '50%', margin: '0 auto', animation: 'spin 0.8s linear infinite' }} />
+                  </div>
+                ) : filteredLogs.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '60px 0', color: C.muted, fontSize: 13 }}>
+                    {logs.length === 0 ? 'Nog geen activiteit. Maak een actie aan of nodig een gebruiker uit.' : 'Geen resultaten voor dit filter.'}
+                  </div>
+                ) : (
+                  <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                          <tr>
+                            {['Tijdstip', 'Door', 'Type', 'Onderwerp / Gebruiker', 'Detail', 'Status'].map(h => (
+                              <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredLogs.map((log, i) => {
+                            const isUserEvent = USER_TYPES.includes(log.change_type);
+                            const isInvite    = log.change_type === 'uitnodiging verstuurd';
+                            const typeColor   = typeColors[log.change_type] || C.muted;
+
+                            // For invite rows: derive onboarding status from users list
+                            let onboardStatus = null;
+                            if (isInvite) {
+                              const invitedUser = users.find(u => u.email === log.action_subject);
+                              if (invitedUser) {
+                                onboardStatus = invitedUser.last_sign_in_at ? 'onboarded' : 'pending';
+                              } else {
+                                onboardStatus = 'pending';
+                              }
+                            }
+
+                            // For action logs: show old→new value
+                            const detailText = isUserEvent
+                              ? (log.new_value || log.old_value || '—')
+                              : (log.old_value && log.new_value ? `${log.old_value} → ${log.new_value}` : (log.new_value || log.old_value || '—'));
+
+                            return (
+                              <tr key={log.id} style={{ background: i % 2 === 0 ? C.surface : C.surface2, borderBottom: `1px solid ${C.border}` }}>
+                                <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', color: C.muted, fontSize: 12 }}>
+                                  {new Date(log.created_at).toLocaleString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </td>
+                                <td style={{ padding: '10px 16px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: C.textSec, fontSize: 12 }} title={log.changed_by_email}>
+                                  {log.changed_by_email}
+                                </td>
+                                <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>
+                                  <span style={{ fontSize: 11, fontWeight: 700, background: typeColor + '14', color: typeColor, border: `1px solid ${typeColor}30`, borderRadius: 5, padding: '2px 8px', textTransform: 'capitalize' }}>
+                                    {log.change_type}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '10px 16px', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500, color: isUserEvent ? '#0EA5E9' : C.text }} title={log.action_subject}>
+                                  {log.action_subject || '—'}
+                                </td>
+                                <td style={{ padding: '10px 16px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: C.muted, fontSize: 12 }} title={detailText}>
+                                  {detailText}
+                                </td>
+                                <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>
+                                  {isInvite && onboardStatus === 'onboarded' && (
+                                    <span style={{ fontSize: 11, fontWeight: 700, background: C.success + '12', color: C.success, border: `1px solid ${C.success}30`, borderRadius: 5, padding: '2px 8px' }}>
+                                      Onboarded
+                                    </span>
+                                  )}
+                                  {isInvite && onboardStatus === 'pending' && (
+                                    <span style={{ fontSize: 11, fontWeight: 700, background: C.warning + '12', color: C.warning, border: `1px solid ${C.warning}30`, borderRadius: 5, padding: '2px 8px' }}>
+                                      Nog niet ingelogd
+                                    </span>
+                                  )}
+                                  {!isInvite && <span style={{ color: C.border, fontSize: 12 }}>—</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
