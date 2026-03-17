@@ -15,6 +15,35 @@ const BREVO_KEY = import.meta.env.VITE_BREVO_API_KEY;
 const APP_URL   = import.meta.env.VITE_APP_URL || 'https://leagl-actionlist.up.railway.app';
 const SENDER    = 'frederiek.deprest@gmail.com';
 
+function buildIcs({ subject, dueDate, assignedByEmail }) {
+  if (!dueDate) return null;
+  // Format date as YYYYMMDD for an all-day event
+  const dateStr = dueDate.replace(/-/g, '');
+  // DTEND is the next day (exclusive end for all-day events)
+  const endDate = new Date(dueDate);
+  endDate.setDate(endDate.getDate() + 1);
+  const endStr = endDate.toISOString().slice(0, 10).replace(/-/g, '');
+  const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@leagl`;
+  const now = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//LEAGL//Actie Platform//NL',
+    'METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${now}`,
+    `DTSTART;VALUE=DATE:${dateStr}`,
+    `DTEND;VALUE=DATE:${endStr}`,
+    `SUMMARY:Actie: ${subject}`,
+    `DESCRIPTION:Toegewezen door ${assignedByEmail}\\nBekijk in Leagl: ${APP_URL}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+  // btoa with Unicode support
+  return btoa(unescape(encodeURIComponent(ics)));
+}
+
 async function sendAssignmentEmail({ to, subject, dueDate, assignedByEmail }) {
   if (!to || !BREVO_KEY) return;
   const dueLine = dueDate
@@ -56,15 +85,21 @@ async function sendAssignmentEmail({ to, subject, dueDate, assignedByEmail }) {
   </table>
 </body></html>`;
 
+  const icsBase64 = buildIcs({ subject, dueDate, assignedByEmail });
+  const body = {
+    sender: { name: 'LEAGL Actie App', email: SENDER },
+    to: [{ email: to }],
+    subject: `Nieuwe actie: ${subject}`,
+    htmlContent: html,
+  };
+  if (icsBase64) {
+    body.attachment = [{ content: icsBase64, name: 'actie.ics' }];
+  }
+
   await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sender: { name: 'LEAGL Actie App', email: SENDER },
-      to: [{ email: to }],
-      subject: `Nieuwe actie: ${subject}`,
-      htmlContent: html,
-    }),
+    body: JSON.stringify(body),
   });
 }
 

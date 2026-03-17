@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Trash2, RefreshCw, Lock, Pencil, AlertTriangle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
@@ -22,9 +22,70 @@ const STATUS_COLOR = {
   'Completed':   { color: COLORS.success, bg: 'rgba(45,158,90,0.08)',  border: 'rgba(45,158,90,0.20)'  },
 };
 
+// Default column widths (px)
+const BASE_WIDTHS     = [40, 320, 120, 140, 170, 130, 180, 70, 80];
+const ACTIONS_WIDTH   = 90;
+const COMPLETED_WIDTH = 130;
+
 export default function ActionTable({ actions, categories, onStatusChange, onProgressChange, onDelete, onEdit }) {
   const { t } = useLanguage();
   const hasCompleted = actions.some(a => a.status === 'Completed');
+
+  const initialWidths = () =>
+    hasCompleted
+      ? [...BASE_WIDTHS, COMPLETED_WIDTH, ACTIONS_WIDTH]
+      : [...BASE_WIDTHS, ACTIONS_WIDTH];
+
+  const [colWidths, setColWidths] = useState(initialWidths);
+  const prevHasCompleted = useRef(hasCompleted);
+
+  // Insert/remove "completed_at" column when hasCompleted flips
+  useEffect(() => {
+    if (prevHasCompleted.current === hasCompleted) return;
+    prevHasCompleted.current = hasCompleted;
+    setColWidths(prev => {
+      if (hasCompleted) {
+        return [...prev.slice(0, -1), COMPLETED_WIDTH, prev[prev.length - 1]];
+      } else {
+        return [...prev.slice(0, -2), prev[prev.length - 1]];
+      }
+    });
+  }, [hasCompleted]);
+
+  // Resize logic — one persistent listener pair
+  const resizing = useRef(null);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!resizing.current) return;
+      const { colIndex, startX, startWidth } = resizing.current;
+      const newWidth = Math.max(50, startWidth + (e.clientX - startX));
+      setColWidths(prev => {
+        const next = [...prev];
+        next[colIndex] = newWidth;
+        return next;
+      });
+    };
+    const onUp = () => {
+      if (!resizing.current) return;
+      resizing.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  const startResize = (e, colIndex) => {
+    e.preventDefault();
+    resizing.current = { colIndex, startX: e.clientX, startWidth: colWidths[colIndex] };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
 
   const getCategoryName = (id) => categories.find(c => c.id === id)?.name ?? '—';
 
@@ -33,25 +94,65 @@ export default function ActionTable({ actions, categories, onStatusChange, onPro
     return new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  const th = { padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', background: COLORS.surface2, borderBottom: `1px solid ${COLORS.border}` };
+  const thBase = {
+    padding: '10px 16px',
+    textAlign: 'left',
+    fontSize: 11,
+    fontWeight: 600,
+    color: COLORS.muted,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    whiteSpace: 'nowrap',
+    background: COLORS.surface2,
+    borderBottom: `1px solid ${COLORS.border}`,
+    position: 'relative',
+    overflow: 'hidden',
+  };
+
+  const resizeHandle = (colIndex, isLast) => isLast ? null : (
+    <div
+      onMouseDown={(e) => startResize(e, colIndex)}
+      style={{
+        position: 'absolute', right: 0, top: 0, bottom: 0, width: 6,
+        cursor: 'col-resize',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div style={{ width: 2, height: '60%', background: COLORS.border, borderRadius: 1 }} />
+    </div>
+  );
+
+  const colCount = colWidths.length;
+
+  const headers = [
+    { label: t('col_num'),     align: 'left'   },
+    { label: t('col_subject'), align: 'left'   },
+    { label: t('col_category'),align: 'left'   },
+    { label: t('col_status'),  align: 'left'   },
+    { label: t('col_progress'),align: 'left'   },
+    { label: t('col_deadline'),align: 'left'   },
+    { label: t('col_assigned'),align: 'left'   },
+    { label: t('col_private'), align: 'center' },
+    { label: t('col_sync'),    align: 'center' },
+    ...(hasCompleted ? [{ label: t('col_completed_at'), align: 'left' }] : []),
+    { label: t('col_actions'), align: 'center' },
+  ];
 
   return (
     <div style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 13, width: colWidths.reduce((a, b) => a + b, 0) }}>
+          <colgroup>
+            {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+          </colgroup>
           <thead>
             <tr>
-              <th style={{ ...th, width: 40 }}>{t('col_num')}</th>
-              <th style={th}>{t('col_subject')}</th>
-              <th style={th}>{t('col_category')}</th>
-              <th style={th}>{t('col_status')}</th>
-              <th style={th}>{t('col_progress')}</th>
-              <th style={th}>{t('col_deadline')}</th>
-              <th style={th}>{t('col_assigned')}</th>
-              <th style={{ ...th, textAlign: 'center' }}>{t('col_private')}</th>
-              <th style={{ ...th, textAlign: 'center' }}>{t('col_sync')}</th>
-              {hasCompleted && <th style={th}>{t('col_completed_at')}</th>}
-              <th style={{ ...th, textAlign: 'center' }}>{t('col_actions')}</th>
+              {headers.map((h, i) => (
+                <th key={i} style={{ ...thBase, textAlign: h.align }}>
+                  {h.label}
+                  {resizeHandle(i, i === colCount - 1)}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -100,7 +201,7 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
     onProgressChange(action.id, next);
   };
 
-  const td = { padding: '10px 16px', borderBottom: `1px solid ${COLORS.border}`, verticalAlign: 'middle' };
+  const td = { padding: '10px 16px', borderBottom: `1px solid ${COLORS.border}`, verticalAlign: 'middle', overflow: 'hidden' };
 
   return (
     <tr
@@ -109,11 +210,11 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
       onMouseLeave={() => setHovered(false)}
     >
       {/* # */}
-      <td style={{ ...td, color: COLORS.muted, fontFamily: 'monospace', fontSize: 12, width: 40 }}>{index}</td>
+      <td style={{ ...td, color: COLORS.muted, fontFamily: 'monospace', fontSize: 12 }}>{index}</td>
 
       {/* Subject */}
       <td style={td}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, maxWidth: 280 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
           {action.is_private && <Lock size={13} style={{ color: COLORS.muted, marginTop: 2, flexShrink: 0 }} />}
           <span style={{ fontWeight: 500, color: COLORS.text, wordBreak: 'break-word', lineHeight: 1.4 }}>{action.subject}</span>
         </div>
@@ -126,7 +227,7 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
         </span>
       </td>
 
-      {/* Status dropdown */}
+      {/* Status */}
       <td style={{ ...td, whiteSpace: 'nowrap' }}>
         <select
           value={action.status}
@@ -177,7 +278,7 @@ function ActionTableRow({ action, index, categoryName, hasCompleted, formatDate,
       </td>
 
       {/* Assigned to */}
-      <td style={{ ...td, maxWidth: 180 }}>
+      <td style={td}>
         {action.needs_reassignment ? (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#D97706', background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.25)', borderRadius: 6, padding: '3px 8px' }}
             title={t('owner_missing_tip')}>
