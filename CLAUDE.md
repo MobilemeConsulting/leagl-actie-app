@@ -48,7 +48,7 @@ src/
 │   └── TenantPicker.jsx       # Keuzescherm bij meerdere tenants
 │
 ├── pages/
-│   ├── AdminDashboard.jsx     # Volledig admin panel (/admin): gebruikers, acties, log
+│   ├── AdminDashboard.jsx     # Volledig admin panel (/admin): gebruikers (gesplitst pending/actief), acties, log
 │   └── SuperAdminDashboard.jsx # Superadmin panel (/superadmin): tenant & gebruikersbeheer
 │
 └── hooks/
@@ -71,6 +71,20 @@ Gebruik **altijd `adminSupabase`** voor `auth.admin.*` calls en voor schrijven v
 
 ### Admin-toegang via rollen
 `/admin` is enkel toegankelijk voor gebruikers met `role = 'admin'` in `tenant_users`. Er is geen apart admin-wachtwoord (VITE_ADMIN_SECRET bestaat niet meer). De rol wordt gecontroleerd in `AdminDashboard.jsx` via `supabase.auth.getSession()` + query op `tenant_users`.
+
+### Onboarding-status in gebruikerstabel (AdminDashboard)
+De gebruikerstabel in `/admin` is opgesplitst in twee secties:
+- **"Uitgenodigd — nog niet ingelogd"** — gebruikers met `last_sign_in_at = null`
+- **"Actieve gebruikers"** — gebruikers die al ingelogd zijn
+
+De kolom **Onboarding** toont drie statussen:
+| Status | Voorwaarde |
+|--------|------------|
+| `Wacht op bevestiging` (oranje) | `email_confirmed_at = null` |
+| `E-mail bevestigd` (indigo) | bevestigd maar `last_sign_in_at = null` |
+| `Ingelogd` (groen) | `last_sign_in_at` aanwezig |
+
+---
 
 ### Navigatievolgorde
 Het startscherm van de hoofdapp is **Dashboard** (`view = 'admin'`). De volgorde in `NAV_ITEMS` (App.jsx) is: Dashboard → Actieve Acties → Afgerond → Team.
