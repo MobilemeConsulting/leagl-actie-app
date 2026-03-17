@@ -610,78 +610,120 @@ export default function AdminDashboard() {
                 </form>
               </div>
 
-              {/* Users table */}
-              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                      <tr>
-                        {['E-mail', 'Provider', 'Aangemaakt', 'Laatste login', 'Onboarding', 'Status', 'Acties'].map(h => (
-                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map(user => {
-                        const isBanned = !!user.banned_until;
-                        const provider = user.app_metadata?.provider || 'email';
-                        return (
-                          <tr key={user.id} style={{ borderBottom: `1px solid ${C.border}` }}
-                            onMouseEnter={e => e.currentTarget.style.background = C.surface2}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                          >
-                            <td style={{ padding: '10px 16px', color: C.text, fontWeight: 500 }}>{user.email}</td>
-                            <td style={{ padding: '10px 16px' }}>
-                              <span style={{ fontSize: 11, background: C.accent + '18', color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>
-                                {provider}
-                              </span>
-                            </td>
-                            <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12 }}>{formatDate(user.created_at)}</td>
-                            <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12 }}>{user.last_sign_in_at ? timeAgo(user.last_sign_in_at) : '—'}</td>
-                            <td style={{ padding: '10px 16px' }}>
-                              {user.last_sign_in_at ? (
-                                <span style={{ fontSize: 11, fontWeight: 700, background: C.success + '12', color: C.success, border: `1px solid ${C.success}30`, borderRadius: 6, padding: '2px 8px' }}>
-                                  Ingelogd
-                                </span>
-                              ) : (
-                                <span style={{ fontSize: 11, fontWeight: 700, background: C.warning + '12', color: C.warning, border: `1px solid ${C.warning}30`, borderRadius: 6, padding: '2px 8px' }}>
-                                  Nog niet ingelogd
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: '10px 16px' }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, background: isBanned ? C.danger + '12' : C.success + '12', color: isBanned ? C.danger : C.success, border: `1px solid ${isBanned ? C.danger + '30' : C.success + '30'}`, borderRadius: 6, padding: '2px 8px' }}>
-                                {isBanned ? 'Inactief' : 'Actief'}
-                              </span>
-                            </td>
-                            <td style={{ padding: '10px 16px' }}>
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <button onClick={() => toggleBan(user)} title={isBanned ? 'Activeren' : 'Deactiveren'}
-                                  style={{ background: isBanned ? C.success + '12' : C.warning + '12', border: `1px solid ${isBanned ? C.success + '30' : C.warning + '30'}`, color: isBanned ? C.success : C.warning, borderRadius: 6, padding: '5px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                  <Ban size={12} /> {isBanned ? 'Activeer' : 'Deactiveer'}
-                                </button>
-                                {provider === 'email' && (
-                                  <button onClick={() => resetPassword(user.id, user.email)} title="Reset wachtwoord"
-                                    style={{ background: C.blue + '12', border: `1px solid ${C.blue}30`, color: C.blue, borderRadius: 6, padding: '5px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <RefreshCw size={12} /> Reset PW
-                                  </button>
-                                )}
-                                <button onClick={() => deleteUser(user.id, user.email)} title="Verwijderen"
-                                  style={{ background: C.danger + '10', border: `1px solid ${C.danger}30`, color: C.danger, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  {users.length === 0 && !loading && (
-                    <div style={{ padding: '40px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Geen gebruikers gevonden</div>
-                  )}
-                </div>
-              </div>
+              {/* Users split: pending + active */}
+              {(() => {
+                const pendingUsers = users.filter(u => !u.last_sign_in_at);
+                const activeUsers  = users.filter(u => !!u.last_sign_in_at);
+                const thStyle = { padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' };
+
+                const renderRow = (user) => {
+                  const isBanned  = !!user.banned_until;
+                  const provider  = user.app_metadata?.provider || 'email';
+                  const isPending = !user.last_sign_in_at;
+                  const isConfirmed = !!user.email_confirmed_at;
+                  return (
+                    <tr key={user.id} style={{ borderBottom: `1px solid ${C.border}` }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.surface2}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td style={{ padding: '10px 16px', color: C.text, fontWeight: 500 }}>{user.email}</td>
+                      <td style={{ padding: '10px 16px' }}>
+                        <span style={{ fontSize: 11, background: C.accent + '18', color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>
+                          {provider}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12 }}>{formatDate(user.created_at)}</td>
+                      <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12 }}>{user.last_sign_in_at ? timeAgo(user.last_sign_in_at) : '—'}</td>
+                      <td style={{ padding: '10px 16px' }}>
+                        {isPending ? (
+                          isConfirmed ? (
+                            <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(99,102,241,0.10)', color: '#6366F1', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 6, padding: '2px 8px' }}>
+                              E-mail bevestigd
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 11, fontWeight: 700, background: C.warning + '12', color: C.warning, border: `1px solid ${C.warning}30`, borderRadius: 6, padding: '2px 8px' }}>
+                              Wacht op bevestiging
+                            </span>
+                          )
+                        ) : (
+                          <span style={{ fontSize: 11, fontWeight: 700, background: C.success + '12', color: C.success, border: `1px solid ${C.success}30`, borderRadius: 6, padding: '2px 8px' }}>
+                            Ingelogd
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '10px 16px' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, background: isBanned ? C.danger + '12' : C.success + '12', color: isBanned ? C.danger : C.success, border: `1px solid ${isBanned ? C.danger + '30' : C.success + '30'}`, borderRadius: 6, padding: '2px 8px' }}>
+                          {isBanned ? 'Inactief' : 'Actief'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 16px' }}>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => toggleBan(user)} title={isBanned ? 'Activeren' : 'Deactiveren'}
+                            style={{ background: isBanned ? C.success + '12' : C.warning + '12', border: `1px solid ${isBanned ? C.success + '30' : C.warning + '30'}`, color: isBanned ? C.success : C.warning, borderRadius: 6, padding: '5px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Ban size={12} /> {isBanned ? 'Activeer' : 'Deactiveer'}
+                          </button>
+                          {provider === 'email' && (
+                            <button onClick={() => resetPassword(user.id, user.email)} title="Reset wachtwoord"
+                              style={{ background: C.blue + '12', border: `1px solid ${C.blue}30`, color: C.blue, borderRadius: 6, padding: '5px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <RefreshCw size={12} /> Reset PW
+                            </button>
+                          )}
+                          <button onClick={() => deleteUser(user.id, user.email)} title="Verwijderen"
+                            style={{ background: C.danger + '10', border: `1px solid ${C.danger}30`, color: C.danger, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                };
+
+                const UserSection = ({ title, count, countColor, emptyMsg, rows }) => (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{title}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, background: countColor + '15', color: countColor, border: `1px solid ${countColor}30`, borderRadius: 99, padding: '1px 9px' }}>{count}</span>
+                    </div>
+                    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                          <thead>
+                            <tr>
+                              {['E-mail', 'Provider', 'Aangemaakt', 'Laatste login', 'Onboarding', 'Status', 'Acties'].map(h => (
+                                <th key={h} style={thStyle}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.length > 0 ? rows : (
+                              <tr><td colSpan={7} style={{ padding: '28px', textAlign: 'center', color: C.muted, fontSize: 13 }}>{emptyMsg}</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                );
+
+                return (
+                  <>
+                    <UserSection
+                      title="Uitgenodigd — nog niet ingelogd"
+                      count={pendingUsers.length}
+                      countColor={C.warning}
+                      emptyMsg="Geen uitgenodigde gebruikers"
+                      rows={pendingUsers.map(renderRow)}
+                    />
+                    <UserSection
+                      title="Actieve gebruikers"
+                      count={activeUsers.length}
+                      countColor={C.success}
+                      emptyMsg="Geen actieve gebruikers"
+                      rows={activeUsers.map(renderRow)}
+                    />
+                  </>
+                );
+              })()}
             </div>
           )}
 
