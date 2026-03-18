@@ -8,7 +8,10 @@ const path = window.location.pathname;
 async function mount() {
   const root = ReactDOM.createRoot(document.getElementById('root'));
 
-  if (path === '/admin') {
+  if (path === '/voice') {
+    const { default: VoicePage } = await import('./pages/VoicePage.jsx')
+    root.render(<VoicePage />)
+  } else if (path === '/admin') {
     const { default: AdminDashboard } = await import('./pages/AdminDashboard.jsx');
     root.render(<LanguageProvider><AdminDashboard /></LanguageProvider>);
   } else if (path === '/superadmin') {
