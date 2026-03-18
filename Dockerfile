@@ -24,8 +24,10 @@ ENV VITE_APP_URL=$VITE_APP_URL
 RUN npm run build
 
 FROM node:20-alpine
-RUN npm install -g serve
 WORKDIR /app
+COPY package*.json ./
+RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
+COPY server.js ./
 EXPOSE 3000
-CMD sh -c "serve dist -s -l ${PORT:-3000}"
+CMD node server.js
