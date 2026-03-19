@@ -62,6 +62,10 @@ export default function VoicePage() {
       gap: '2rem',
     }}>
 
+      <a href="/" style={{ alignSelf: 'flex-start', color: '#64748b', fontSize: '0.85rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        ← Actielijst
+      </a>
+
       <div style={{ color: '#64748b', fontSize: '0.8rem', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 600 }}>
         LEAGL — Spraakassistent
       </div>
@@ -142,10 +146,6 @@ export default function VoicePage() {
         </div>
       )}
 
-      {/* Link naar actielijst */}
-      <a href="/" style={{ color: '#334155', fontSize: '0.8rem', textDecoration: 'none', marginTop: '1rem' }}>
-        ← Naar actielijst
-      </a>
 
       <style>{`
         @keyframes pulse {
