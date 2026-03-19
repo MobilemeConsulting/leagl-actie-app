@@ -15,6 +15,10 @@ export default function VoicePage() {
       await navigator.mediaDevices.getUserMedia({ audio: true })
       const conv = await Conversation.startSession({
         agentId: AGENT_ID,
+        overrides: {
+          tts: { voiceId: 'DYvUSWzbIy47Jl54JlkE' },
+          agent: { language: 'nl' },
+        },
         onStatusChange: ({ status }) => setStatus(status),
         onModeChange:   ({ mode })   => setMode(mode),
         onError: (err) => setFout(typeof err === 'string' ? err : err?.message || 'Verbindingsfout'),
