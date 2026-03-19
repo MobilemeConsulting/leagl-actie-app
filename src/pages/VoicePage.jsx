@@ -21,8 +21,17 @@ export default function VoicePage() {
         },
         onStatusChange: ({ status }) => setStatus(status),
         onModeChange:   ({ mode })   => setMode(mode),
-        onError: (err) => setFout(typeof err === 'string' ? err : err?.message || 'Verbindingsfout'),
-        onDisconnect: () => { setStatus('disconnected'); setMode('listening') },
+        onError: (err) => {
+          const msg = typeof err === 'string' ? err : err?.message || JSON.stringify(err)
+          console.error('ElevenLabs error:', msg)
+          setFout(msg)
+        },
+        onDisconnect: ({ reason } = {}) => {
+          console.warn('ElevenLabs disconnect, reason:', reason)
+          setFout(`Verbinding verbroken: ${reason || 'onbekend'}`)
+          setStatus('disconnected')
+          setMode('listening')
+        },
       })
       convRef.current = conv
     } catch (err) {
