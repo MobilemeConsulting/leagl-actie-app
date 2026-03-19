@@ -17,7 +17,6 @@ export default function VoicePage() {
         agentId: AGENT_ID,
         overrides: {
           tts: { voiceId: 'DYvUSWzbIy47Jl54JlkE' },
-          agent: { language: 'nl' },
         },
         onStatusChange: ({ status }) => setStatus(status),
         onModeChange:   ({ mode })   => setMode(mode),
