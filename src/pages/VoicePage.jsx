@@ -8,6 +8,10 @@ const supabase = createClient(
 
 const TENANT_ID = '4e3ad38c-08a8-4eae-94dc-0b9633180e70'
 
+const EL_API_KEY   = 'sk_e9ec17b5f003fb6237d7c69c2aa2c65ad0843890c9584512'
+const EL_VOICE_ID  = 'DYvUSWzbIy47Jl54JlkE'
+const EL_MODEL     = 'eleven_multilingual_v2'
+
 // ─── Hulpfuncties ────────────────────────────────────────────────────────────
 
 function formatDate(d) {
@@ -121,21 +125,67 @@ function naamVanEmail(email) {
   return deel.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 }
 
-// ─── TTS met fallback ────────────────────────────────────────────────────────
+// ─── TTS via ElevenLabs (met browser-fallback) ───────────────────────────────
 
-function spreekTekst(text, onKlaar) {
-  if (!window.speechSynthesis) { onKlaar?.(); return }
-  window.speechSynthesis.cancel()
-  const utt = new SpeechSynthesisUtterance(text)
-  utt.lang = 'nl-NL'
-  utt.rate = 1.0
-  let klaar = false
-  const gereed = () => { if (klaar) return; klaar = true; onKlaar?.() }
-  utt.onend = gereed
-  utt.onerror = gereed
-  window.speechSynthesis.speak(utt)
-  // Fallback als onend niet vuurt (iOS/Tesla quirk)
-  setTimeout(gereed, Math.max(text.length * 75, 2000))
+let huidigeAudio = null
+
+async function spreekTekst(text, onKlaar, onSpreekt) {
+  // Stop eventueel lopende audio
+  if (huidigeAudio) {
+    huidigeAudio.pause()
+    huidigeAudio = null
+  }
+
+  onSpreekt?.(true)
+
+  try {
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${EL_VOICE_ID}`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': EL_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        model_id: EL_MODEL,
+        voice_settings: { stability: 0.45, similarity_boost: 0.80, style: 0.2, use_speaker_boost: true },
+      }),
+    })
+
+    if (!res.ok) throw new Error(`ElevenLabs ${res.status}`)
+
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    huidigeAudio = audio
+
+    const gereed = () => {
+      URL.revokeObjectURL(url)
+      huidigeAudio = null
+      onSpreekt?.(false)
+      onKlaar?.()
+    }
+    audio.onended = gereed
+    audio.onerror = gereed
+    audio.play().catch(gereed)
+  } catch (err) {
+    console.warn('ElevenLabs fout, fallback naar browser TTS:', err)
+    onSpreekt?.(false)
+    // Browser-fallback
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+      const utt = new SpeechSynthesisUtterance(text)
+      utt.lang = 'nl-NL'
+      let klaar = false
+      const gereed = () => { if (klaar) return; klaar = true; onKlaar?.() }
+      utt.onend = gereed
+      utt.onerror = gereed
+      window.speechSynthesis.speak(utt)
+      setTimeout(gereed, Math.max(text.length * 75, 2000))
+    } else {
+      onKlaar?.()
+    }
+  }
 }
 
 // ─── Hoofdcomponent ──────────────────────────────────────────────────────────
@@ -151,6 +201,7 @@ export default function VoicePage() {
   const [overzichtActies, setOverzichtActies] = useState([])
   const [concept, setConcept] = useState({ onderwerp: '', category_id: null, category_naam: '', due_date: null, toegewezen_aan: null })
   const [isListening, setIsListening] = useState(false)
+  const [isSpreking, setIsSpreking] = useState(false)
 
   const recognitionRef = useRef(null)
   const categoriesRef = useRef([])
@@ -189,7 +240,7 @@ export default function VoicePage() {
     voegBerichtToe('assistent', vraag)
     setFase('vragen')
     huidigeHandlerRef.current = handler
-    spreekTekst(vraag, () => startLuisteren(handler))
+    spreekTekst(vraag, () => startLuisteren(handler), setIsSpreking)
   }
 
   function startLuisteren(handler) {
@@ -392,7 +443,7 @@ export default function VoicePage() {
     } else {
       voegBerichtToe('assistent', '✅ Actie opgeslagen!')
       setFase('klaar')
-      spreekTekst('Actie is succesvol opgeslagen!')
+      spreekTekst('Actie is succesvol opgeslagen!', null, setIsSpreking)
     }
   }
 
@@ -420,12 +471,12 @@ export default function VoicePage() {
 
     if (acties.length === 0) {
       voegBerichtToe('assistent', 'Er zijn geen open acties.')
-      spreekTekst('Er zijn geen open acties.')
+      spreekTekst('Er zijn geen open acties.', null, setIsSpreking)
     } else {
       const msg = `Er zijn ${acties.length} open acties.`
       const preview = acties.slice(0, 3).map((a, i) => `${i + 1}: ${a.subject}`).join('. ')
       voegBerichtToe('assistent', msg)
-      spreekTekst(msg + ' ' + preview)
+      spreekTekst(msg + ' ' + preview, null, setIsSpreking)
     }
   }
 
@@ -534,6 +585,23 @@ export default function VoicePage() {
         </button>
       )}
 
+      {/* Sprekende indicator (ElevenLabs speelt) */}
+      {isSpreking && !isListening && (
+        <div style={{
+          width: '160px',
+          height: '160px',
+          borderRadius: '50%',
+          backgroundColor: '#7c3aed',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'spreek 1.2s ease-in-out infinite',
+          flexShrink: 0,
+        }}>
+          <SpeakerIcon size={64} />
+        </div>
+      )}
+
       {/* Luisterindicator */}
       {isListening && (
         <div style={{
@@ -552,7 +620,7 @@ export default function VoicePage() {
       )}
 
       {/* Wachten/verwerken indicator */}
-      {(fase === 'vragen' || fase === 'verwerken' || fase === 'opslaan') && !isListening && (
+      {(fase === 'vragen' || fase === 'verwerken' || fase === 'opslaan') && !isListening && !isSpreking && (
         <div style={{
           width: '80px',
           height: '80px',
@@ -585,20 +653,22 @@ export default function VoicePage() {
       {/* Statustekst */}
       <div style={{ color: '#cbd5e1', fontSize: '1.1rem', fontWeight: 500, textAlign: 'center', minHeight: '1.5rem' }}>
         {fase === 'idle' && 'Tik om te beginnen'}
-        {fase === 'vragen' && 'Luister...'}
+        {isSpreking && !isListening && 'Aan het spreken...'}
         {fase === 'luisteren' && '🎙 Ik luister'}
-        {fase === 'verwerken' && 'Even wachten...'}
+        {(fase === 'verwerken' || fase === 'vragen') && !isSpreking && !isListening && 'Even wachten...'}
         {fase === 'opslaan' && 'Opslaan...'}
         {fase === 'klaar' && 'Opgeslagen!'}
         {fase === 'fout' && '❌ Er ging iets mis'}
-        {fase === 'overzicht' && `${overzichtActies.length} open acties`}
+        {fase === 'overzicht' && !isSpreking && `${overzichtActies.length} open acties`}
       </div>
 
-      {/* Tap-om-te-antwoorden knop tijdens TTS */}
-      {fase === 'vragen' && (
+      {/* Tik-om-te-antwoorden knop tijdens spraak */}
+      {(fase === 'vragen' || isSpreking) && !isListening && (
         <button
           onClick={() => {
+            if (huidigeAudio) { huidigeAudio.pause(); huidigeAudio = null }
             window.speechSynthesis?.cancel()
+            setIsSpreking(false)
             if (huidigeHandlerRef.current) startLuisteren(huidigeHandlerRef.current)
           }}
           style={stijlKnopSecundair}
@@ -698,6 +768,10 @@ export default function VoicePage() {
           70%  { box-shadow: 0 0 0 16px rgba(239,68,68,0.1), 0 0 0 32px rgba(239,68,68,0.05); }
           100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5), 0 0 0 16px rgba(239,68,68,0.2); }
         }
+        @keyframes spreek {
+          0%,100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.5), 0 0 0 12px rgba(124,58,237,0.2); transform: scale(1); }
+          50%     { box-shadow: 0 0 0 14px rgba(124,58,237,0.2), 0 0 0 28px rgba(124,58,237,0.08); transform: scale(1.04); }
+        }
         @keyframes spin {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
@@ -753,6 +827,16 @@ function MicIcon({ size }) {
       <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
       <line x1="12" y1="19" x2="12" y2="23" />
       <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  )
+}
+
+function SpeakerIcon({ size }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
     </svg>
   )
 }
