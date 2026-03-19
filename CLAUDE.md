@@ -49,11 +49,14 @@ src/
 │
 ├── pages/
 │   ├── AdminDashboard.jsx     # Volledig admin panel (/admin): gebruikers (gesplitst pending/actief), acties, log
-│   └── SuperAdminDashboard.jsx # Superadmin panel (/superadmin): tenant & gebruikersbeheer
+│   ├── SuperAdminDashboard.jsx # Superadmin panel (/superadmin): tenant & gebruikersbeheer
+│   └── VoicePage.jsx          # Spraakassistent (/voice): verbindt met ElevenLabs Conversational AI agent
 │
 └── hooks/
     ├── useActions.js          # (lichtgewicht hook — hoofd CRUD zit in App.jsx)
     └── useMicrosoftSync.js    # Microsoft Graph API integratie (To Do sync)
+
+server.js                      # Express server: statische bestanden + API endpoints
 ```
 
 ---
@@ -87,7 +90,28 @@ De kolom **Onboarding** toont drie statussen:
 ---
 
 ### Navigatievolgorde
-Het startscherm van de hoofdapp is **Dashboard** (`view = 'admin'`). De volgorde in `NAV_ITEMS` (App.jsx) is: Dashboard → Actieve Acties → Afgerond → Team.
+Het startscherm van de hoofdapp is **Dashboard** (`view = 'admin'`). De volgorde in `NAV_ITEMS` (App.jsx) is: Dashboard → Actieve Acties → Afgerond → Team. Onderaan de sidebar staat ook een **"Spraakassistent"** knop die linkt naar `/voice`.
+
+### Spraakassistent (/voice)
+De voice pagina is een standalone route (geen auth vereist) die verbindt met een **ElevenLabs Conversational AI agent** via `@11labs/client`. De agent beheert het gesprek volledig (intent, vragen stellen, opslaan). De pagina zelf heeft nauwelijks logica — enkel verbinden/verbreken en UI-state tonen.
+
+De agent roept drie webhook-endpoints aan in `server.js`:
+
+| Endpoint | Methode | Doel |
+|----------|---------|------|
+| `/api/voice/opties` | GET | Categorieën + gebruikers ophalen |
+| `/api/voice/actie` | POST | Nieuwe actie opslaan |
+| `/api/voice/acties` | GET | Open acties ophalen |
+
+**Hardcoded constanten in VoicePage.jsx:**
+- `AGENT_ID = 'agent_4401km2r3djfeqvrvtwhepda4qqk'`
+- Voice override: `DYvUSWzbIy47Jl54JlkE`
+- `TENANT_ID` in `server.js` (zelfde als in de app)
+
+**ElevenLabs agent configuratie** (via elevenlabs.io dashboard):
+- System prompt instrueert de agent om in het Nederlands te werken
+- Drie webhook tools gekoppeld aan de Railway URL
+- Agent moet **gepubliceerd** zijn (Publish knop) anders weigert hij verbindingen
 
 ---
 
@@ -212,9 +236,14 @@ Het afzenderadres staat hardcoded als `SENDER`-constante in elk bestand. Bij een
 
 De app bouwt via een **multi-stage Dockerfile**:
 1. Node 20 alpine → `npm install` + `npm run build` (Vite build)
-2. Tweede stage → serveert `dist/` via `serve`
+2. Tweede stage → serveert `dist/` via Express (`server.js`)
 
 Alle `VITE_*` variabelen worden doorgegeven als Docker build args en gebakken in de bundle bij buildtijd. Een wijziging in env-variabelen vereist een **nieuwe deploy** (geen runtime herstart).
+
+**Deploy commando** (Railway is niet gekoppeld aan GitHub, deploy via CLI):
+```bash
+railway up
+```
 
 ---
 
@@ -224,5 +253,6 @@ Alle `VITE_*` variabelen worden doorgegeven als Docker build args en gebakken in
 |--------|------|-------------|
 | Supabase | Database, Auth, Storage | Project URL + keys in env vars |
 | Brevo | Transactionele e-mail | API key in `VITE_BREVO_API_KEY` |
-| Railway | Hosting + CI/CD | Dockerfile + env vars in Railway dashboard |
+| Railway | Hosting + CI/CD | Deploy via `railway up` (niet via GitHub) |
 | Microsoft Graph | To Do synchronisatie | OAuth flow via `useMicrosoftSync.js` |
+| ElevenLabs | Spraakassistent (TTS + conversatie) | Agent ID hardcoded in `VoicePage.jsx`, API key hardcoded (`EL_API_KEY`). Agent beheren via elevenlabs.io dashboard. |
