@@ -62,7 +62,8 @@ export default function ActionForm({ categories, users = [], onSave, onCancel, s
       await onSave(formData, isEdit ? editAction.id : null);
       if (!isEdit) {
         const providerToken = session?.provider_token;
-        if (providerToken) {
+        const isValidToken = providerToken && providerToken.split('.').length === 3;
+        if (isValidToken) {
           try { await syncToMicrosoftToDo(formData, providerToken); }
           catch (syncErr) { console.warn('MS To Do sync failed (non-fatal):', syncErr.message); }
         }

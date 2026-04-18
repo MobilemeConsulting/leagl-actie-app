@@ -49,7 +49,7 @@ src/
 │
 ├── pages/
 │   ├── AdminDashboard.jsx     # Volledig admin panel (/admin): gebruikers (gesplitst pending/actief), acties, log
-│   ├── SuperAdminDashboard.jsx # Superadmin panel (/superadmin): tenant & gebruikersbeheer
+│   ├── SuperAdminDashboard.jsx # Superadmin panel (/superadmin): tenant & gebruikersbeheer, zoeken, audit log
 │   └── VoicePage.jsx          # Spraakassistent (/voice): verbindt met ElevenLabs Conversational AI agent
 │
 └── hooks/
@@ -112,6 +112,39 @@ De agent roept drie webhook-endpoints aan in `server.js`:
 - System prompt instrueert de agent om in het Nederlands te werken
 - Drie webhook tools gekoppeld aan de Railway URL
 - Agent moet **gepubliceerd** zijn (Publish knop) anders weigert hij verbindingen
+
+---
+
+### SuperAdmin Panel (/superadmin)
+
+Toegang via `VITE_SUPERADMIN_SECRET` (wachtwoord in sessionStorage). Vier tabs:
+
+**Tenants tab**
+- Tenants aanmaken (naam, slug, kleur, logo) en verwijderen
+- Tenants bewerken via potlood-knop → modal (naam, slug, kleur, logo)
+- Statistieken per tenant: aantal gebruikers, aantal acties, datum laatste activiteit
+  - Stats worden geladen via `loadTenantStats()` bij opstarten (parallel ophalen van `tenant_users`, `actions`, `action_logs`)
+
+**Gebruikers tab**
+- Selecteer een tenant → toon alle gekoppelde gebruikers
+- Nieuwe gebruiker aanmaken: account in Supabase Auth + koppeling + welkomstmail in één stap
+- Bestaande gebruiker (al in Auth) koppelen aan tenant
+- Per gebruiker drie acties:
+  - **Sleutel** — wachtwoord resetten: genereert reset-link via `auth.admin.generateLink`, stuurt via Brevo
+  - **Prullenbak** — volledig verwijderen: verwijdert uit Auth + alle `tenant_users` koppelingen
+  - **X** — enkel ontkoppelen van de geselecteerde tenant
+
+**Zoeken tab**
+- Globale gebruikerszoekfunctie op e-mailadres (gedeeltelijk zoeken)
+- Haalt alle auth-gebruikers op via `auth.admin.listUsers` + alle `tenant_users`
+- Toont: e-mail, aanmaakdatum, laatste login, alle tenants + rol
+- Zelfde reset- en verwijderknoppen als in de Gebruikers tab
+
+**Audit Log tab**
+- Toont de laatste 200 regels uit `action_logs` over alle tenants
+- Filterbaar per tenant
+- Kolommen: tijdstip, tenant, actie/onderwerp, gewijzigd door, type wijziging, oud, nieuw
+- Tenant naam wordt opgezocht uit de lokale `tenants` state
 
 ---
 
@@ -239,6 +272,18 @@ De app bouwt via een **multi-stage Dockerfile**:
 2. Tweede stage → serveert `dist/` via Express (`server.js`)
 
 Alle `VITE_*` variabelen worden doorgegeven als Docker build args en gebakken in de bundle bij buildtijd. Een wijziging in env-variabelen vereist een **nieuwe deploy** (geen runtime herstart).
+
+**Vereiste env-variabelen:**
+
+| Variable | Doel |
+|----------|------|
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon key |
+| `VITE_SUPABASE_SERVICE_KEY` | Supabase service_role key |
+| `VITE_BREVO_API_KEY` | Brevo API key |
+| `VITE_APP_URL` | Publieke URL (voor e-maillinks en OAuth redirects) |
+| `VITE_SUPERADMIN_SECRET` | Wachtwoord voor `/superadmin` toegang |
+| `SIRI_TOKEN` | Token voor Siri/shortcut integratie (optioneel) |
 
 **Deploy commando** (Railway is niet gekoppeld aan GitHub, deploy via CLI):
 ```bash

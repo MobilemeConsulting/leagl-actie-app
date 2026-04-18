@@ -111,6 +111,7 @@ async function sendWelcomeEmail({ to, tempPassword, name, role = 'member', tenan
   </table>
 </body></html>`;
 
+  console.log('[Brevo] Welkomstmail versturen naar:', to, '| key aanwezig:', !!BREVO_KEY, '| sender:', SENDER);
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json' },
@@ -121,7 +122,9 @@ async function sendWelcomeEmail({ to, tempPassword, name, role = 'member', tenan
       htmlContent: html,
     }),
   });
-  if (!res.ok) throw new Error(`Brevo fout ${res.status}`);
+  const responseText = await res.text();
+  console.log('[Brevo] Status:', res.status, '| Antwoord:', responseText);
+  if (!res.ok) throw new Error(`Brevo fout ${res.status}: ${responseText}`);
 }
 
 const C = {

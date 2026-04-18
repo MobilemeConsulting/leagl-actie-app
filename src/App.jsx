@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, LogOut, ClipboardList, Loader2, CheckSquare, ListTodo, LayoutDashboard, Users, Search, X } from 'lucide-react';
 import { supabase, signOut } from './supabaseClient.js';
+import { adminSupabase } from './adminSupabaseClient.js';
 import { TenantProvider, useTenantContext } from './context/TenantContext.jsx';
 import { useLanguage } from './context/LanguageContext.jsx';
 import LoginPage from './components/LoginPage.jsx';
@@ -96,11 +97,15 @@ async function sendAssignmentEmail({ to, subject, dueDate, assignedByEmail }) {
     body.attachment = [{ content: icsBase64, name: 'actie.ics' }];
   }
 
-  await fetch('https://api.brevo.com/v3/smtp/email', {
+  console.log('[Brevo] Toewijzingsmail versturen naar:', to, '| key aanwezig:', !!BREVO_KEY, '| sender:', SENDER);
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+  const responseText = await res.text();
+  console.log('[Brevo] Status:', res.status, '| Antwoord:', responseText);
+  if (!res.ok) throw new Error(`Brevo fout ${res.status}: ${responseText}`);
 }
 
 const COLORS = {
@@ -201,18 +206,21 @@ function AppShell({ session, onSignOut }) {
     }
   }, [tenant?.id]);
 
+  const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
   const writeLog = useCallback(async ({ actionId, actionSubject, changeType, oldValue, newValue }) => {
     if (!tenant?.id) return;
     try {
-      await supabase.from('action_logs').insert([{
-        action_id: actionId,
-        action_subject: actionSubject,
+      const { error: logError } = await adminSupabase.from('action_logs').insert([{
+        action_id: actionId && isUuid(actionId) ? actionId : null,
+        action_subject: actionSubject ?? null,
         changed_by_email: session?.user?.email || 'onbekend',
         change_type: changeType,
         old_value: oldValue ?? null,
         new_value: newValue ?? null,
         tenant_id: tenant.id,
       }]);
+      if (logError) console.warn('Log schrijven mislukt:', logError.message, logError.details);
     } catch (e) {
       console.warn('Log schrijven mislukt:', e.message);
     }
@@ -290,8 +298,8 @@ function AppShell({ session, onSignOut }) {
   const handleDelete = async (id) => {
     if (!window.confirm(t('confirm_delete'))) return;
     const action = actions.find(a => a.id === id);
-    const { error } = await supabase.from('actions').delete().eq('id', id);
-    if (error) return;
+    const { error } = await adminSupabase.from('actions').delete().eq('id', id).eq('tenant_id', tenant.id);
+    if (error) { showToast('Verwijderen mislukt: ' + error.message, 'error'); return; }
     setActions(prev => prev.filter(a => a.id !== id));
     showToast(t('toast_deleted'), 'info');
     writeLog({ actionId: id, actionSubject: action?.subject, changeType: 'verwijderd', oldValue: action?.status });

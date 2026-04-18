@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { adminSupabase } from '../adminSupabaseClient.js';
-import { Plus, Trash2, Eye, EyeOff, LogOut, ShieldCheck, RefreshCw, Building2, Users, X, UserPlus } from 'lucide-react';
+import { Plus, Trash2, Eye, EyeOff, LogOut, ShieldCheck, RefreshCw, Building2, Users, X, UserPlus, ScrollText, Search, Pencil, Key } from 'lucide-react';
 
 const BREVO_KEY = import.meta.env.VITE_BREVO_API_KEY;
 const APP_URL   = import.meta.env.VITE_APP_URL || 'https://leagl-actionlist.up.railway.app';
@@ -158,8 +158,10 @@ function SALogin({ onAuth }) {
 }
 
 const NAV = [
-  { id: 'tenants', label: 'Tenants',    icon: <Building2 size={15} /> },
-  { id: 'users',   label: 'Gebruikers', icon: <Users size={15} /> },
+  { id: 'tenants',  label: 'Tenants',    icon: <Building2 size={15} /> },
+  { id: 'users',    label: 'Gebruikers', icon: <Users size={15} /> },
+  { id: 'search',   label: 'Zoeken',     icon: <Search size={15} /> },
+  { id: 'auditlog', label: 'Audit Log',  icon: <ScrollText size={15} /> },
 ];
 
 export default function SuperAdminDashboard() {
@@ -190,6 +192,31 @@ export default function SuperAdminDashboard() {
   const [newRole, setNewRole]       = useState('member');
   const [creating, setCreating]     = useState(false);
 
+  // Audit log tab
+  const [auditLog, setAuditLog]               = useState([]);
+  const [auditLoading, setAuditLoading]       = useState(false);
+  const [auditTenantId, setAuditTenantId]     = useState('');
+
+  // Tenant stats
+  const [tenantStats, setTenantStats]         = useState({});
+
+  // Tenant edit modal
+  const [editTenant, setEditTenant]           = useState(null);
+  const [editName, setEditName]               = useState('');
+  const [editSlug, setEditSlug]               = useState('');
+  const [editColor, setEditColor]             = useState('');
+  const [editLogo, setEditLogo]               = useState('');
+  const [editSaving, setEditSaving]           = useState(false);
+
+  // Global user search
+  const [userSearch, setUserSearch]           = useState('');
+  const [searchResults, setSearchResults]     = useState([]);
+  const [searchLoading, setSearchLoading]     = useState(false);
+  const [searchDone, setSearchDone]           = useState(false);
+
+  // Password reset in progress
+  const [resettingPw, setResettingPw]         = useState(new Set());
+
   function showToast(msg, type = 'success') {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
@@ -214,8 +241,44 @@ export default function SuperAdminDashboard() {
     setUsersLoading(false);
   }, []);
 
-  useEffect(() => { if (authed) loadTenants(); }, [authed]);
+  const loadTenantStats = useCallback(async () => {
+    const [usersRes, actionsRes, logsRes] = await Promise.all([
+      adminSupabase.from('tenant_users').select('tenant_id'),
+      adminSupabase.from('actions').select('tenant_id'),
+      adminSupabase.from('action_logs').select('tenant_id, created_at').order('created_at', { ascending: false }).limit(2000),
+    ]);
+    const stats = {};
+    (usersRes.data || []).forEach(r => {
+      if (!stats[r.tenant_id]) stats[r.tenant_id] = { userCount: 0, actionCount: 0, lastActivity: null };
+      stats[r.tenant_id].userCount++;
+    });
+    (actionsRes.data || []).forEach(r => {
+      if (!stats[r.tenant_id]) stats[r.tenant_id] = { userCount: 0, actionCount: 0, lastActivity: null };
+      stats[r.tenant_id].actionCount++;
+    });
+    (logsRes.data || []).forEach(r => {
+      if (!stats[r.tenant_id]) stats[r.tenant_id] = { userCount: 0, actionCount: 0, lastActivity: null };
+      if (!stats[r.tenant_id].lastActivity) stats[r.tenant_id].lastActivity = r.created_at;
+    });
+    setTenantStats(stats);
+  }, []);
+
+  const loadAuditLog = useCallback(async (tenantId) => {
+    setAuditLoading(true);
+    let query = adminSupabase
+      .from('action_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (tenantId) query = query.eq('tenant_id', tenantId);
+    const { data } = await query;
+    setAuditLog(data || []);
+    setAuditLoading(false);
+  }, []);
+
+  useEffect(() => { if (authed) { loadTenants(); loadTenantStats(); } }, [authed]);
   useEffect(() => { if (selectedTenantId) loadTenantUsers(selectedTenantId); else setTenantUsers([]); }, [selectedTenantId]);
+  useEffect(() => { if (activeNav === 'auditlog') loadAuditLog(auditTenantId); }, [activeNav, auditTenantId]);
 
   async function createTenant(e) {
     e.preventDefault();
@@ -267,6 +330,86 @@ export default function SuperAdminDashboard() {
       showToast(err.message, 'error');
     } finally {
       setAdding(false);
+    }
+  }
+
+  async function saveTenantEdit(e) {
+    e.preventDefault();
+    if (!editTenant) return;
+    setEditSaving(true);
+    const { error } = await adminSupabase.from('tenants').update({
+      name: editName.trim(),
+      slug: editSlug.trim().toLowerCase().replace(/\s+/g, '-'),
+      primary_color: editColor,
+      logo_url: editLogo.trim() || null,
+    }).eq('id', editTenant.id);
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      showToast(`Tenant "${editName}" bijgewerkt`);
+      setEditTenant(null);
+      await loadTenants();
+    }
+    setEditSaving(false);
+  }
+
+  async function searchUsers() {
+    if (!userSearch.trim()) return;
+    setSearchLoading(true);
+    setSearchDone(false);
+    const q = userSearch.trim().toLowerCase();
+    const [authRes, tuRes] = await Promise.all([
+      adminSupabase.auth.admin.listUsers({ perPage: 1000 }),
+      adminSupabase.from('tenant_users').select('*'),
+    ]);
+    const matched = (authRes.data?.users || []).filter(u => u.email?.toLowerCase().includes(q));
+    const allTu = tuRes.data || [];
+    const results = matched.map(u => ({
+      ...u,
+      tenantLinks: allTu.filter(tu => tu.user_id === u.id).map(tu => ({
+        ...tu,
+        tenantName: tenants.find(t => t.id === tu.tenant_id)?.name || tu.tenant_id,
+      })),
+    }));
+    setSearchResults(results);
+    setSearchLoading(false);
+    setSearchDone(true);
+  }
+
+  async function deleteAuthUser(userId, email) {
+    if (!window.confirm(`"${email}" volledig verwijderen uit Supabase Auth?\n\nAlle tenant-koppelingen worden ook verwijderd.`)) return;
+    const { error } = await adminSupabase.auth.admin.deleteUser(userId);
+    if (error) { showToast(error.message, 'error'); return; }
+    await adminSupabase.from('tenant_users').delete().eq('user_id', userId);
+    showToast(`${email} volledig verwijderd`);
+    setTenantUsers(prev => prev.filter(u => u.user_id !== userId));
+    setSearchResults(prev => prev.filter(u => u.id !== userId));
+  }
+
+  async function resetPassword(userId, email) {
+    setResettingPw(prev => new Set([...prev, userId]));
+    try {
+      const { data: linkData, error } = await adminSupabase.auth.admin.generateLink({ type: 'recovery', email });
+      if (error) throw error;
+      const resetLink = linkData?.properties?.action_link || linkData?.action_link;
+      if (!resetLink) throw new Error('Geen reset link gegenereerd');
+      if (BREVO_KEY) {
+        await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sender: { name: 'LEAGL Actie App', email: SENDER },
+            to: [{ email }],
+            subject: 'Wachtwoord resetten — LEAGL Actie App',
+            htmlContent: `<p>Hallo,</p><p>Klik op de onderstaande link om je wachtwoord te resetten:</p><p><a href="${resetLink}">${resetLink}</a></p><p>De link is 1 uur geldig.</p>`,
+          }),
+        });
+      }
+      showToast(`Reset link verstuurd naar ${email}`);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setResettingPw(prev => { const s = new Set(prev); s.delete(userId); return s; });
     }
   }
 
@@ -396,45 +539,209 @@ export default function SuperAdminDashboard() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr>
-                      {['Naam', 'Slug', 'Accent kleur', 'Aangemaakt', ''].map(h => (
+                      {['Naam', 'Slug', 'Kleur', 'Gebruikers', 'Acties', 'Laatste activiteit', 'Aangemaakt', ''].map(h => (
                         <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {tenants.map(t => (
-                      <tr key={t.id} style={{ borderBottom: `1px solid ${C.border}` }}
-                        onMouseEnter={e => e.currentTarget.style.background = C.surface2}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <td style={{ padding: '10px 16px', fontWeight: 600, color: C.text }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            {t.logo_url && <img src={t.logo_url} alt={t.name} style={{ height: 24, objectFit: 'contain' }} />}
-                            {t.name}
-                          </div>
-                        </td>
-                        <td style={{ padding: '10px 16px', color: C.muted, fontFamily: 'monospace', fontSize: 12 }}>{t.slug}</td>
-                        <td style={{ padding: '10px 16px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 20, height: 20, borderRadius: 5, background: t.primary_color, border: `1px solid ${C.border}`, flexShrink: 0 }} />
-                            <span style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace' }}>{t.primary_color}</span>
-                          </div>
-                        </td>
-                        <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12 }}>
-                          {new Date(t.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </td>
-                        <td style={{ padding: '10px 16px' }}>
-                          <button onClick={() => deleteTenant(t.id, t.name)}
-                            style={{ background: C.danger + '10', border: `1px solid ${C.danger}30`, color: C.danger, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <Trash2 size={12} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {tenants.map(t => {
+                      const s = tenantStats[t.id] || {};
+                      return (
+                        <tr key={t.id} style={{ borderBottom: `1px solid ${C.border}` }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.surface2}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <td style={{ padding: '10px 16px', fontWeight: 600, color: C.text }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              {t.logo_url && <img src={t.logo_url} alt={t.name} style={{ height: 24, objectFit: 'contain' }} />}
+                              {t.name}
+                            </div>
+                          </td>
+                          <td style={{ padding: '10px 16px', color: C.muted, fontFamily: 'monospace', fontSize: 12 }}>{t.slug}</td>
+                          <td style={{ padding: '10px 16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ width: 20, height: 20, borderRadius: 5, background: t.primary_color, border: `1px solid ${C.border}`, flexShrink: 0 }} />
+                              <span style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace' }}>{t.primary_color}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '10px 16px', color: C.text, fontWeight: 600, textAlign: 'center' }}>{s.userCount ?? '—'}</td>
+                          <td style={{ padding: '10px 16px', color: C.text, fontWeight: 600, textAlign: 'center' }}>{s.actionCount ?? '—'}</td>
+                          <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12, whiteSpace: 'nowrap' }}>
+                            {s.lastActivity ? new Date(s.lastActivity).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                          </td>
+                          <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12, whiteSpace: 'nowrap' }}>
+                            {new Date(t.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td style={{ padding: '10px 16px' }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button onClick={() => { setEditTenant(t); setEditName(t.name); setEditSlug(t.slug); setEditColor(t.primary_color); setEditLogo(t.logo_url || ''); }}
+                                style={{ background: C.blue + '12', border: `1px solid ${C.blue}30`, color: C.blue, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <Pencil size={12} />
+                              </button>
+                              <button onClick={() => deleteTenant(t.id, t.name)}
+                                style={{ background: C.danger + '10', border: `1px solid ${C.danger}30`, color: C.danger, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {tenants.length === 0 && !loading && (
                   <div style={{ padding: '40px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Nog geen tenants aangemaakt</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── SEARCH TAB ── */}
+          {activeNav === 'search' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>Gebruiker zoeken</div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Zoek op e-mailadres (gedeeltelijk). Toont in welke tenants de gebruiker zit.</div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && searchUsers()}
+                    placeholder="naam@bedrijf.be"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button onClick={searchUsers} disabled={searchLoading || !userSearch.trim()}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, background: searchLoading ? C.muted : C.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: searchLoading || !userSearch.trim() ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+                    <Search size={14} /> {searchLoading ? 'Zoeken...' : 'Zoeken'}
+                  </button>
+                </div>
+              </div>
+
+              {searchDone && (
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        {['E-mail', 'Aangemaakt', 'Laatste login', 'Tenants', ''].map(h => (
+                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {searchResults.map(u => (
+                        <tr key={u.id} style={{ borderBottom: `1px solid ${C.border}` }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.surface2}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <td style={{ padding: '10px 16px', fontWeight: 500, color: C.text }}>{u.email}</td>
+                          <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12, whiteSpace: 'nowrap' }}>
+                            {u.created_at ? new Date(u.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                          </td>
+                          <td style={{ padding: '10px 16px', color: C.muted, fontSize: 12, whiteSpace: 'nowrap' }}>
+                            {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Nog niet'}
+                          </td>
+                          <td style={{ padding: '10px 16px' }}>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {u.tenantLinks.length === 0
+                                ? <span style={{ fontSize: 11, color: C.muted }}>Geen tenant</span>
+                                : u.tenantLinks.map(tl => (
+                                  <span key={tl.id} style={{ fontSize: 11, fontWeight: 600, background: C.surface2, color: C.text, border: `1px solid ${C.border}`, borderRadius: 5, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                                    {tl.tenantName} <span style={{ color: C.muted, fontWeight: 400 }}>({tl.role})</span>
+                                  </span>
+                                ))}
+                            </div>
+                          </td>
+                          <td style={{ padding: '10px 16px' }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button onClick={() => resetPassword(u.id, u.email)} disabled={resettingPw.has(u.id)}
+                                title="Wachtwoord resetten"
+                                style={{ background: C.accent + '18', border: `1px solid ${C.accent}40`, color: C.accent, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: resettingPw.has(u.id) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 4, opacity: resettingPw.has(u.id) ? 0.5 : 1 }}>
+                                <Key size={12} />
+                              </button>
+                              <button onClick={() => deleteAuthUser(u.id, u.email)}
+                                title="Volledig verwijderen"
+                                style={{ background: C.danger + '10', border: `1px solid ${C.danger}30`, color: C.danger, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {searchResults.length === 0 && (
+                    <div style={{ padding: '40px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Geen gebruikers gevonden voor "{userSearch}"</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── AUDIT LOG TAB ── */}
+          {activeNav === 'auditlog' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Filteren op tenant</div>
+                  <select value={auditTenantId} onChange={e => setAuditTenantId(e.target.value)}
+                    style={{ ...inputStyle, maxWidth: 340 }}>
+                    <option value="">— Alle tenants —</option>
+                    {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+                <button onClick={() => loadAuditLog(auditTenantId)} disabled={auditLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: 7, background: C.surface2, border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, padding: '9px 14px', fontSize: 12, cursor: 'pointer', marginTop: 18 }}>
+                  <RefreshCw size={13} style={{ animation: auditLoading ? 'spin 0.8s linear infinite' : 'none' }} />
+                  Herladen
+                </button>
+              </div>
+
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      {['Tijdstip', 'Tenant', 'Actie / Onderwerp', 'Gewijzigd door', 'Type', 'Oud', 'Nieuw'].map(h => (
+                        <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', background: C.surface2, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLog.map(entry => {
+                      const tenantName = tenants.find(t => t.id === entry.tenant_id)?.name || entry.tenant_id?.slice(0, 8) || '—';
+                      return (
+                        <tr key={entry.id} style={{ borderBottom: `1px solid ${C.border}` }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.surface2}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <td style={{ padding: '9px 14px', color: C.muted, whiteSpace: 'nowrap' }}>
+                            {new Date(entry.created_at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td style={{ padding: '9px 14px', color: C.text, fontWeight: 500, whiteSpace: 'nowrap' }}>{tenantName}</td>
+                          <td style={{ padding: '9px 14px', color: C.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.action_subject || '—'}</td>
+                          <td style={{ padding: '9px 14px', color: C.muted, whiteSpace: 'nowrap' }}>{entry.changed_by_email || '—'}</td>
+                          <td style={{ padding: '9px 14px' }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, background: C.surface2, color: C.text, border: `1px solid ${C.border}`, borderRadius: 5, padding: '2px 7px', whiteSpace: 'nowrap' }}>
+                              {entry.change_type || '—'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '9px 14px', color: C.muted, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.old_value || '—'}</td>
+                          <td style={{ padding: '9px 14px', color: C.text, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.new_value || '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {auditLog.length === 0 && !auditLoading && (
+                  <div style={{ padding: '40px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Geen logregels gevonden</div>
+                )}
+                {auditLoading && (
+                  <div style={{ padding: '40px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Laden...</div>
+                )}
+                {auditLog.length > 0 && (
+                  <div style={{ padding: '10px 16px', borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.muted, background: C.surface2 }}>
+                    {auditLog.length} regels getoond (max 200)
+                  </div>
                 )}
               </div>
             </div>
@@ -531,10 +838,23 @@ export default function SuperAdminDashboard() {
                               {new Date(tu.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
                             </td>
                             <td style={{ padding: '10px 16px' }}>
-                              <button onClick={() => removeUser(tu)}
-                                style={{ background: C.danger + '10', border: `1px solid ${C.danger}30`, color: C.danger, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <X size={12} />
-                              </button>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button onClick={() => resetPassword(tu.user_id, tu.user_email)} disabled={resettingPw.has(tu.user_id)}
+                                  title="Wachtwoord resetten"
+                                  style={{ background: C.accent + '18', border: `1px solid ${C.accent}40`, color: C.accent, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: resettingPw.has(tu.user_id) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 4, opacity: resettingPw.has(tu.user_id) ? 0.5 : 1 }}>
+                                  <Key size={12} />
+                                </button>
+                                <button onClick={() => deleteAuthUser(tu.user_id, tu.user_email)}
+                                  title="Volledig verwijderen uit Auth"
+                                  style={{ background: C.danger + '10', border: `1px solid ${C.danger}30`, color: C.danger, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Trash2 size={12} />
+                                </button>
+                                <button onClick={() => removeUser(tu)}
+                                  title="Ontkoppelen van tenant"
+                                  style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.muted, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <X size={12} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -550,6 +870,49 @@ export default function SuperAdminDashboard() {
           )}
         </div>
       </div>
+
+      {/* ── TENANT EDIT MODAL ── */}
+      {editTenant && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setEditTenant(null); }}>
+          <div style={{ background: C.surface, borderRadius: 16, padding: '28px 32px', width: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Tenant bewerken</div>
+              <button onClick={() => setEditTenant(null)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', display: 'flex', padding: 4 }}><X size={16} /></button>
+            </div>
+            <form onSubmit={saveTenantEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Naam</div>
+                <input value={editName} onChange={e => setEditName(e.target.value)} required style={inputStyle} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Slug</div>
+                <input value={editSlug} onChange={e => setEditSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} required style={inputStyle} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Kleur</div>
+                  <input type="color" value={editColor} onChange={e => setEditColor(e.target.value)} style={{ ...inputStyle, padding: 4, height: 41, cursor: 'pointer' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Logo URL (optioneel)</div>
+                  <input value={editLogo} onChange={e => setEditLogo(e.target.value)} placeholder="https://..." style={inputStyle} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+                <button type="button" onClick={() => setEditTenant(null)}
+                  style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  Annuleren
+                </button>
+                <button type="submit" disabled={editSaving}
+                  style={{ background: editSaving ? C.muted : C.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: editSaving ? 'not-allowed' : 'pointer' }}>
+                  {editSaving ? 'Opslaan...' : 'Opslaan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, background: toast.type === 'error' ? C.danger : C.success, color: '#fff', borderRadius: 10, padding: '12px 20px', fontSize: 13, fontWeight: 600, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', maxWidth: 380 }}>
