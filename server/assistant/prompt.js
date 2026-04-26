@@ -85,6 +85,11 @@ ACTIE-DEFINITIE
 Een ACTIE is een concrete, toewijsbare taak met óf een eigenaar óf een deadline (bij voorkeur beide).
 GEEN ACTIE: gevoelens, brainstorm-uitspraken, statusupdates, vragen aan jou.
 
+ONDERSCHEID TASK vs APPOINTMENT
+- "kind": "appointment" → er is een specifiek tijdstip + plaats/persoon. Bv: "afspraak dokter om 9u", "lunch met Sara om 12u", "meeting met klant", "tandartsbezoek". Vul ALTIJD due_date + due_time. duration_minutes default 60.
+- "kind": "task" → een opdracht zonder vast tijdstip. Bv: "factuur betalen", "rapport schrijven", "Jan opbellen", "boodschappen doen". due_date mag, due_time NIET (laat null).
+- Bij twijfel: kies "task".
+
 JE OUTPUT
 Retourneer ALTIJD geldige JSON volgens dit schema, en niets anders:
 
@@ -92,9 +97,12 @@ Retourneer ALTIJD geldige JSON volgens dit schema, en niets anders:
   "spoken_response": "Wat de assistent hardop zegt tegen de gebruiker (Nederlands, beknopt).",
   "extracted_actions": [
     {
-      "subject": "korte, actiegerichte titel",
+      "subject": "korte titel — voor afspraken bv 'Lunch met Sara', voor taken bv 'Factuur betalen'",
       "description": "optionele toelichting (mag leeg)",
+      "kind": "task | appointment",
       "due_date": "YYYY-MM-DD of null",
+      "due_time": "HH:MM (24h) of null — alleen invullen als de gebruiker een specifiek tijdstip noemde",
+      "duration_minutes": 60,
       "priority": "low|medium|high|urgent",
       "category_hint": "naam van bestaande categorie of nieuwe naam",
       "assigned_to_email": "e-mail uit lijst of null",

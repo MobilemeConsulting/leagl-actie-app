@@ -174,7 +174,10 @@ export function makeAssistantRouter(supabase) {
           tenant_id: req.tenantId,
           subject: String(a.subject).slice(0, 500),
           description: a.description || null,
+          kind: a.kind === 'appointment' ? 'appointment' : 'task',
           due_date: isValidDate(a.due_date) ? a.due_date : null,
+          due_time: isValidTime(a.due_time) ? a.due_time : null,
+          duration_minutes: Number.isInteger(a.duration_minutes) ? a.duration_minutes : null,
           priority,
           category_hint: a.category_hint || null,
           category_id: resolveCategoryId(a.category_hint, context.categories) || settings.default_category_id || null,
@@ -292,21 +295,23 @@ export function makeAssistantRouter(supabase) {
       } else {
         console.log(`[google/tasks] OVERGESLAGEN — hasTokens=${!!googleTokens?.access_token} enabled=${!!settings?.google_tasks_enabled}`)
       }
-      if (googleTokens?.access_token && settings?.google_calendar_enabled && action.due_date) {
+      // Calendar event alleen voor appointments (taken horen niet in agenda).
+      const isAppointment = r.kind === 'appointment'
+      if (googleTokens?.access_token && settings?.google_calendar_enabled && action.due_date && isAppointment) {
         try {
           const event = await createCalendarEvent({
             accessToken: googleTokens.access_token,
             calendarId: settings.google_calendar_id || 'primary',
-            action,
+            action: { ...action, due_time: r.due_time, duration_minutes: r.duration_minutes },
           })
           googleSyncs.calendar_id = event.id
-          console.log(`[google/calendar] OK — "${action.subject}" (${action.due_date}) → event id ${event.id}`)
+          console.log(`[google/calendar] OK — "${action.subject}" (${action.due_date}${r.due_time ? ' ' + r.due_time : ' all-day'}) → event id ${event.id}`)
         } catch (e) {
           console.warn(`[google/calendar] FOUT — "${action.subject}":`, e.message)
           googleSyncs.calendar_error = e.message
         }
       } else {
-        console.log(`[google/calendar] OVERGESLAGEN — hasTokens=${!!googleTokens?.access_token} enabled=${!!settings?.google_calendar_enabled} hasDueDate=${!!action.due_date}`)
+        console.log(`[google/calendar] OVERGESLAGEN — hasTokens=${!!googleTokens?.access_token} enabled=${!!settings?.google_calendar_enabled} hasDueDate=${!!action.due_date} kind=${r.kind || '?'}`)
       }
 
       created.push({
@@ -573,6 +578,10 @@ function sendCallbackHtml(res, success, message = '') {
 
 function isValidDate(d) {
   return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)
+}
+
+function isValidTime(t) {
+  return typeof t === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(t)
 }
 
 function dedupeStrings(arr) {

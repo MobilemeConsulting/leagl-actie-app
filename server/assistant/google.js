@@ -134,14 +134,29 @@ export async function createGoogleTask({ accessToken, tasklistId = '@default', a
   return json
 }
 
-// ─── Push naar Google Calendar (all-day event op due_date) ──────────────
+// ─── Push naar Google Calendar ──────────────────────────────────────────
+// Met due_time: timed event (start + end op specifiek tijdstip), default duur 60 min.
+// Zonder due_time: all-day event op due_date.
+const TZ = process.env.ASSISTANT_TIMEZONE || 'Europe/Brussels'
+
 export async function createCalendarEvent({ accessToken, calendarId = 'primary', action }) {
   if (!action.due_date) return null
   const body = {
     summary: action.subject,
     description: action.description || '',
-    start: { date: action.due_date },
-    end: { date: nextDayIso(action.due_date) }, // exclusive end
+  }
+  if (action.due_time && /^\d{2}:\d{2}$/.test(action.due_time)) {
+    const startIso = `${action.due_date}T${action.due_time}:00`
+    const duration = Number.isInteger(action.duration_minutes) && action.duration_minutes > 0
+      ? action.duration_minutes : 60
+    const startMs = new Date(`${startIso}+00:00`).getTime() // tz-naive parse maar alleen voor +duration berekening
+    const endMs = startMs + duration * 60 * 1000
+    const endIso = new Date(endMs).toISOString().slice(0, 19) // YYYY-MM-DDTHH:MM:SS
+    body.start = { dateTime: startIso, timeZone: TZ }
+    body.end = { dateTime: endIso, timeZone: TZ }
+  } else {
+    body.start = { date: action.due_date }
+    body.end = { date: nextDayIso(action.due_date) }
   }
   if (action.assigned_to_email) {
     body.attendees = [{ email: action.assigned_to_email }]
