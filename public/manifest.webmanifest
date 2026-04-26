@@ -1,0 +1,34 @@
+{
+  "name": "LEAGL Assistent",
+  "short_name": "LEAGL",
+  "description": "Voice-first executive assistent voor LEAGL Actie App",
+  "start_url": "/assistant?autostart=1&source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0C0D10",
+  "lang": "nl",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nieuwe sessie",
+      "short_name": "Spreek",
+      "url": "/assistant?autostart=1",
+      "description": "Start direct een spraak-sessie met de assistent"
+    },
+    {
+      "name": "Actielijst",
+      "short_name": "Acties",
+      "url": "/",
+      "description": "Open de hoofdapplicatie"
+    }
+  ]
+}

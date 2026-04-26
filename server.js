@@ -2,16 +2,19 @@ import express from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { makeAssistantRouter, makeGoogleCallbackRouter } from './server/assistantRoutes.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const app = express()
-app.use(express.json())
+app.use(express.json({ limit: '1mb' }))
 
 const PORT = process.env.PORT || 3000
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.VITE_SUPABASE_SERVICE_KEY
 const SIRI_TOKEN = process.env.SIRI_TOKEN
+const ASSISTANT_TOKEN = process.env.ASSISTANT_TOKEN
+const ASSISTANT_TENANT_ID = process.env.ASSISTANT_TENANT_ID
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('FOUT: VITE_SUPABASE_URL of VITE_SUPABASE_SERVICE_KEY ontbreekt!')
@@ -128,6 +131,32 @@ app.get('/api/voice/acties', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message })
   res.json({ acties: data || [], totaal: (data || []).length })
 })
+
+// ─── Executive AI Assistent (/assistant) ─────────────────────────────────────
+// Single-tenant via shared-secret token (zelfde model als VOICE_TOKEN).
+// Alle assistent-endpoints injecteren tenantId uit ASSISTANT_TENANT_ID.
+function checkAssistantAuth(req, res, next) {
+  if (!ASSISTANT_TOKEN) {
+    // dev-mode: laat door, maar log waarschuwing eenmalig
+    if (!checkAssistantAuth._warned) {
+      console.warn('[assistant] ASSISTANT_TOKEN niet ingesteld — endpoints zijn open!')
+      checkAssistantAuth._warned = true
+    }
+  } else if (req.headers['x-assistant-token'] !== ASSISTANT_TOKEN) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+  if (!ASSISTANT_TENANT_ID) {
+    return res.status(500).json({ error: 'ASSISTANT_TENANT_ID niet geconfigureerd' })
+  }
+  req.tenantId = ASSISTANT_TENANT_ID
+  req.tenantName = process.env.ASSISTANT_TENANT_NAME || ''
+  next()
+}
+
+// Google OAuth callback is publiek (Google stuurt geen token-header).
+// Mount VÓÓR de auth-protected router zodat /api/assistant/google/callback geen 401 krijgt.
+app.use('/api/assistant/google', makeGoogleCallbackRouter(supabase))
+app.use('/api/assistant', checkAssistantAuth, makeAssistantRouter(supabase))
 
 // SPA fallback — alle andere routes gaan naar index.html
 app.get('*', (_req, res) => {
