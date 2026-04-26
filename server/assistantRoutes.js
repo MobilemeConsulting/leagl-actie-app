@@ -242,9 +242,11 @@ export function makeAssistantRouter(supabase) {
 
     const { data: rows } = await supabase.from('assistant_extracted_actions')
       .select('*').in('id', extractedIds).eq('tenant_id', tenantId)
+    console.log(`[assistant/confirm] ${rows?.length || 0} rows opgehaald`)
     const created = []
     for (const r of rows || []) {
       if (r.status === 'confirmed' && r.created_action_id) {
+        console.log(`[assistant/confirm] SKIP — al bevestigd: ${r.subject} (id ${r.id})`)
         created.push({ extracted_id: r.id, action_id: r.created_action_id, subject: r.subject })
         continue
       }
@@ -282,10 +284,13 @@ export function makeAssistantRouter(supabase) {
             action,
           })
           googleSyncs.tasks_id = task.id
+          console.log(`[google/tasks] OK — "${action.subject}" → task id ${task.id}`)
         } catch (e) {
-          console.warn('[google/tasks] sync fout:', e.message)
+          console.warn(`[google/tasks] FOUT — "${action.subject}":`, e.message)
           googleSyncs.tasks_error = e.message
         }
+      } else {
+        console.log(`[google/tasks] OVERGESLAGEN — hasTokens=${!!googleTokens?.access_token} enabled=${!!settings?.google_tasks_enabled}`)
       }
       if (googleTokens?.access_token && settings?.google_calendar_enabled && action.due_date) {
         try {
@@ -295,10 +300,13 @@ export function makeAssistantRouter(supabase) {
             action,
           })
           googleSyncs.calendar_id = event.id
+          console.log(`[google/calendar] OK — "${action.subject}" (${action.due_date}) → event id ${event.id}`)
         } catch (e) {
-          console.warn('[google/calendar] sync fout:', e.message)
+          console.warn(`[google/calendar] FOUT — "${action.subject}":`, e.message)
           googleSyncs.calendar_error = e.message
         }
+      } else {
+        console.log(`[google/calendar] OVERGESLAGEN — hasTokens=${!!googleTokens?.access_token} enabled=${!!settings?.google_calendar_enabled} hasDueDate=${!!action.due_date}`)
       }
 
       created.push({
