@@ -21,15 +21,16 @@ function isEndCallPhrase(text) {
 }
 
 // Trefwoorden die automatisch een sessiesamenvatting per e-mail triggeren.
+// Ruim opgevat: detect een mail-werkwoord ergens in de zin.
 const EMAIL_SUMMARY_PATTERNS = [
-  /\b(mail|email|e-?mail)\s+(me|mij)\b/i,
-  /\bstuur\s+(me|mij|het|de\s+samenvatting)\b/i,
-  /\bverstuur\s+(de\s+)?samenvatting\b/i,
-  /\bsamenvatting\s+(in|naar)\s+(mijn\s+)?inbox\b/i,
-  /\bzet (het|dit) in mijn (mail|mailbox|inbox)\b/i,
+  /\b(mail|email|e-?mail|mailtje|mailen)\b/i,        // elk woord met 'mail'
+  /\b(stuur|verstuur|stuurt|stuurde)\b.*\b(samenvatting|recap|overzicht)\b/i,
+  /\b(in|naar|op)\s+(mijn\s+)?(inbox|mailbox|mail|gmail)\b/i,
 ]
 function isEmailRequest(text) {
-  return EMAIL_SUMMARY_PATTERNS.some(re => re.test(text))
+  const matched = EMAIL_SUMMARY_PATTERNS.some(re => re.test(text))
+  if (matched) console.log('[assistant] email-trigger gedetecteerd:', text)
+  return matched
 }
 const PRIORITY_LABELS = {
   low: 'Laag', medium: 'Normaal', high: 'Hoog', urgent: 'Urgent',
@@ -256,12 +257,18 @@ export default function AssistantPage() {
   }
 
   const sendEmail = useCallback(async () => {
-    if (!sessionIdRef.current) return
+    if (!sessionIdRef.current) {
+      console.warn('[assistant] sendEmail: geen session_id')
+      return
+    }
+    console.log('[assistant] sendEmail trigger voor sessie', sessionIdRef.current)
     setEmailStatus('sending')
     try {
       const res = await assistantApi.emailSummary(sessionIdRef.current)
+      console.log('[assistant] sendEmail OK:', res)
       setEmailStatus(`Verstuurd naar ${res.sent_to}`)
     } catch (e) {
+      console.error('[assistant] sendEmail FOUT:', e)
       setEmailStatus(`Fout: ${e.message}`)
     }
   }, [])
