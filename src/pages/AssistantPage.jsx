@@ -259,7 +259,10 @@ export default function AssistantPage() {
     <div style={S.page}>
       <div style={S.topRow}>
         <a href="/" style={S.back}>← Actielijst</a>
-        <a href="/assistant/settings" style={S.back} title="Instellingen">⚙ Instellingen</a>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <a href="/assistant/history" style={S.back} title="Historiek">📜 Sessies</a>
+          <a href="/assistant/settings" style={S.back} title="Instellingen">⚙ Instellingen</a>
+        </div>
       </div>
       <div style={S.brand}>LEAGL — Executive Assistent</div>
 

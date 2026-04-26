@@ -17,6 +17,9 @@ async function mount() {
   } else if (path === '/assistant/settings') {
     const { default: AssistantSettingsPage } = await import('./pages/AssistantSettingsPage.jsx')
     root.render(<AssistantSettingsPage />)
+  } else if (path === '/assistant/history') {
+    const { default: AssistantHistoryPage } = await import('./pages/AssistantHistoryPage.jsx')
+    root.render(<AssistantHistoryPage />)
   } else if (path === '/admin') {
     const { default: AdminDashboard } = await import('./pages/AdminDashboard.jsx');
     root.render(<LanguageProvider><AdminDashboard /></LanguageProvider>);
