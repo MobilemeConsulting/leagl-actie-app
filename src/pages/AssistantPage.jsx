@@ -282,8 +282,17 @@ export default function AssistantPage() {
   const isSpeaking = status === 'speaking'
   const isListening = status === 'listening'
 
+  // Bij ?autostart=1: hele pagina is tap-zone om sessie te starten (handsfree-friendly).
+  const handlePageTap = (e) => {
+    if (autostart && status === 'idle' && !errorMsg) {
+      // Negeer kliks op nav-links zodat ← Actielijst etc nog werken
+      const target = e.target.closest('a, button')
+      if (!target) start()
+    }
+  }
+
   return (
-    <div style={S.page}>
+    <div style={S.page} onClick={handlePageTap}>
       <div style={S.topRow}>
         <a href="/" style={S.back}>← Actielijst</a>
         <div style={{ display: 'flex', gap: 16 }}>
@@ -292,6 +301,9 @@ export default function AssistantPage() {
         </div>
       </div>
       <div style={S.brand}>LEAGL — Executive Assistent</div>
+      {autostart && status === 'idle' && !errorMsg && (
+        <div style={S.tapHint}>👆 Tik ergens op het scherm om te starten</div>
+      )}
 
       <button
         onClick={isActive ? stop : start}
@@ -452,6 +464,12 @@ const S = {
   },
   statusText: { color: '#e2e8f0', fontSize: '1.1rem', fontWeight: 600, textAlign: 'center' },
   subtle: { color: '#475569', fontSize: '0.85rem', textAlign: 'center' },
+  tapHint: {
+    color: '#fbbf24', fontSize: '1rem', textAlign: 'center',
+    background: 'rgba(251,191,36,0.1)', padding: '0.75rem 1.25rem',
+    borderRadius: 12, border: '1px solid rgba(251,191,36,0.3)',
+    fontWeight: 500, letterSpacing: 0.5,
+  },
   error: {
     backgroundColor: '#450a0a', border: '1px solid #7f1d1d',
     borderRadius: 10, padding: '0.75rem 1.25rem',
