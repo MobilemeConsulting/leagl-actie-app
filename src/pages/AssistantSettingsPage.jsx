@@ -24,14 +24,19 @@ export default function AssistantSettingsPage() {
   const [error, setError] = useState(null)
   const popupRef = useRef(null)
 
-  // Probeer user uit supabase sessie te halen, anders laat veld invullen
+  // Probeer user uit supabase sessie te halen → localStorage cache → manueel invullen
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      const e = data?.session?.user?.email
+      const e = data?.session?.user?.email || localStorage.getItem('leagl_assistant_user_email')
       if (e) setUserEmail(e)
       else setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
+
+  // Cache user_email in localStorage zodat /assistant pagina 'm ook kent
+  useEffect(() => {
+    if (userEmail) localStorage.setItem('leagl_assistant_user_email', userEmail)
+  }, [userEmail])
 
   const loadAll = useCallback(async (email) => {
     if (!email) return

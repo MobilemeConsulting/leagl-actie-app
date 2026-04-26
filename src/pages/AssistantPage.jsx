@@ -46,11 +46,16 @@ export default function AssistantPage() {
   const autostart = typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('autostart') === '1'
 
-  // Probeer user_email op te halen (mag falen — assistent werkt ook zonder)
+  // Probeer user_email op te halen via auth → localStorage → null
+  // (auth-sessie is niet vereist voor /assistant; localStorage cache komt uit Settings pagina)
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      userEmailRef.current = data?.session?.user?.email || null
-    }).catch(() => {})
+      const email = data?.session?.user?.email || localStorage.getItem('leagl_assistant_user_email') || null
+      userEmailRef.current = email
+      if (email) localStorage.setItem('leagl_assistant_user_email', email)
+    }).catch(() => {
+      userEmailRef.current = localStorage.getItem('leagl_assistant_user_email') || null
+    })
   }, [])
 
   const requestWakeLock = useCallback(async () => {
