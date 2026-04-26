@@ -192,9 +192,26 @@ export function makeAssistantRouter(supabase) {
         extractedRows.push(inserted)
       }
 
+      // Auto-confirm wanneer settings.confirm_before_save = false (handsfree, bv in de auto)
+      const autoConfirm = settings && settings.confirm_before_save === false && extractedRows.length > 0
+      let autoCreated = []
+      if (autoConfirm) {
+        try {
+          autoCreated = await confirmExtractedActions({
+            extractedIds: extractedRows.map(r => r.id),
+            tenantId: req.tenantId,
+            userEmail: effectiveUserEmail,
+            settings,
+          })
+        } catch (e) {
+          console.warn('[assistant/analyze] auto-confirm fout:', e.message)
+        }
+      }
+
       res.json({
         spoken_response: parsed.spoken_response || '',
         extracted: extractedRows,
+        auto_confirmed: autoCreated,
         summary: merged.summary,
         decisions: merged.decisions,
         open_questions: merged.open_questions,
@@ -206,6 +223,84 @@ export function makeAssistantRouter(supabase) {
       res.status(500).json({ error: err.message || 'unknown' })
     }
   })
+
+  // Helper: bevestigt extracted actions, maakt echte rows + Google sync (gedeeld door /confirm en auto-confirm)
+  async function confirmExtractedActions({ extractedIds, tenantId, userEmail, settings: settingsArg }) {
+    if (!extractedIds || extractedIds.length === 0) return []
+    const settings = settingsArg || (userEmail ? await getOrCreateSettings(tenantId, userEmail) : null)
+    const googleEnabled = settings && (settings.google_tasks_enabled || settings.google_calendar_enabled)
+    const googleTokens = googleEnabled
+      ? await loadAndRefreshTokens(supabase, tenantId, userEmail)
+      : null
+
+    const { data: rows } = await supabase.from('assistant_extracted_actions')
+      .select('*').in('id', extractedIds).eq('tenant_id', tenantId)
+    const created = []
+    for (const r of rows || []) {
+      if (r.status === 'confirmed' && r.created_action_id) {
+        created.push({ extracted_id: r.id, action_id: r.created_action_id, subject: r.subject })
+        continue
+      }
+      const payload = {
+        tenant_id: tenantId,
+        subject: r.subject,
+        status: 'Open',
+        percent_delivery: 0,
+        is_private: false,
+        category_id: r.category_id || null,
+        due_date: r.due_date || null,
+        assigned_to_email: r.assigned_to_email || null,
+      }
+      const { data: action, error: aErr } = await supabase.from('actions')
+        .insert(payload).select().single()
+      if (aErr) {
+        console.warn('[assistant] confirm insert fout:', aErr.message)
+        continue
+      }
+      await supabase.from('assistant_extracted_actions').update({
+        status: 'confirmed', created_action_id: action.id,
+      }).eq('id', r.id)
+      await writeActionLog({
+        tenantId, actionId: action.id, subject: action.subject,
+        changedByEmail: userEmail || 'assistent', changeType: 'aangemaakt',
+        newValue: `Toegewezen aan: ${action.assigned_to_email || '—'} (via assistent)`,
+      })
+
+      const googleSyncs = {}
+      if (googleTokens?.access_token && settings?.google_tasks_enabled) {
+        try {
+          const task = await createGoogleTask({
+            accessToken: googleTokens.access_token,
+            tasklistId: settings.google_tasklist_id || '@default',
+            action,
+          })
+          googleSyncs.tasks_id = task.id
+        } catch (e) {
+          console.warn('[google/tasks] sync fout:', e.message)
+          googleSyncs.tasks_error = e.message
+        }
+      }
+      if (googleTokens?.access_token && settings?.google_calendar_enabled && action.due_date) {
+        try {
+          const event = await createCalendarEvent({
+            accessToken: googleTokens.access_token,
+            calendarId: settings.google_calendar_id || 'primary',
+            action,
+          })
+          googleSyncs.calendar_id = event.id
+        } catch (e) {
+          console.warn('[google/calendar] sync fout:', e.message)
+          googleSyncs.calendar_error = e.message
+        }
+      }
+
+      created.push({
+        extracted_id: r.id, action_id: action.id, subject: action.subject,
+        google: Object.keys(googleSyncs).length ? googleSyncs : undefined,
+      })
+    }
+    return created
+  }
 
   // Lijst extracted actions per sessie
   router.get('/extracted/:session_id', async (req, res) => {
@@ -223,92 +318,11 @@ export function makeAssistantRouter(supabase) {
       if (!Array.isArray(extracted_action_ids) || extracted_action_ids.length === 0) {
         return res.status(400).json({ error: 'extracted_action_ids[] verplicht' })
       }
-
-      const { data: rows, error: rErr } = await supabase.from('assistant_extracted_actions')
-        .select('*').in('id', extracted_action_ids).eq('tenant_id', req.tenantId)
-      if (rErr) return res.status(500).json({ error: rErr.message })
-
-      // Laad settings + Google tokens éénmalig per request
-      const settings = user_email
-        ? await getOrCreateSettings(req.tenantId, user_email)
-        : null
-      const googleEnabled = settings && (settings.google_tasks_enabled || settings.google_calendar_enabled)
-      const googleTokens = googleEnabled
-        ? await loadAndRefreshTokens(supabase, req.tenantId, user_email)
-        : null
-
-      const created = []
-      for (const r of rows || []) {
-        if (r.status === 'confirmed' && r.created_action_id) {
-          created.push({ extracted_id: r.id, action_id: r.created_action_id, subject: r.subject })
-          continue
-        }
-        const payload = {
-          tenant_id: req.tenantId,
-          subject: r.subject,
-          status: 'Open',
-          percent_delivery: 0,
-          is_private: false,
-          category_id: r.category_id || null,
-          due_date: r.due_date || null,
-          assigned_to_email: r.assigned_to_email || null,
-        }
-        const { data: action, error: aErr } = await supabase.from('actions')
-          .insert(payload).select().single()
-        if (aErr) {
-          console.warn('[assistant/confirm] insert fout:', aErr.message)
-          continue
-        }
-        await supabase.from('assistant_extracted_actions').update({
-          status: 'confirmed',
-          created_action_id: action.id,
-        }).eq('id', r.id)
-        await writeActionLog({
-          tenantId: req.tenantId,
-          actionId: action.id,
-          subject: action.subject,
-          changedByEmail: user_email || 'assistent',
-          changeType: 'aangemaakt',
-          newValue: `Toegewezen aan: ${action.assigned_to_email || '—'} (via assistent)`,
-        })
-
-        // Google-sync — best-effort, fouten loggen maar response niet breken
-        const googleSyncs = {}
-        if (googleTokens?.access_token && settings?.google_tasks_enabled) {
-          try {
-            const task = await createGoogleTask({
-              accessToken: googleTokens.access_token,
-              tasklistId: settings.google_tasklist_id || '@default',
-              action,
-            })
-            googleSyncs.tasks_id = task.id
-          } catch (e) {
-            console.warn('[google/tasks] sync fout:', e.message)
-            googleSyncs.tasks_error = e.message
-          }
-        }
-        if (googleTokens?.access_token && settings?.google_calendar_enabled && action.due_date) {
-          try {
-            const event = await createCalendarEvent({
-              accessToken: googleTokens.access_token,
-              calendarId: settings.google_calendar_id || 'primary',
-              action,
-            })
-            googleSyncs.calendar_id = event.id
-          } catch (e) {
-            console.warn('[google/calendar] sync fout:', e.message)
-            googleSyncs.calendar_error = e.message
-          }
-        }
-
-        created.push({
-          extracted_id: r.id,
-          action_id: action.id,
-          subject: action.subject,
-          google: Object.keys(googleSyncs).length ? googleSyncs : undefined,
-        })
-      }
-
+      const created = await confirmExtractedActions({
+        extractedIds: extracted_action_ids,
+        tenantId: req.tenantId,
+        userEmail: user_email,
+      })
       res.json({ created })
     } catch (err) {
       console.error('[assistant/confirm] fout:', err)

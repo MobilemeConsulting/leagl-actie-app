@@ -94,12 +94,16 @@ export default function AssistantPage() {
         setOpenQs(result.open_questions || [])
         setRisks(result.risks || [])
         if (result.extracted?.length) {
-          // Voeg alleen nieuwe pending toe (op basis van id)
+          const autoIds = new Set((result.auto_confirmed || []).map(c => c.extracted_id))
+          // Pending = alleen extracted die NIET auto-bevestigd zijn
           setExtracted(prev => {
             const existing = new Set(prev.map(e => e.id))
-            const fresh = result.extracted.filter(e => !existing.has(e.id))
+            const fresh = result.extracted.filter(e => !existing.has(e.id) && !autoIds.has(e.id))
             return [...prev, ...fresh]
           })
+        }
+        if (result.auto_confirmed?.length) {
+          setConfirmed(prev => [...prev, ...result.auto_confirmed])
         }
       } catch (e) {
         console.warn('[assistant] analyze fout:', e.message)
