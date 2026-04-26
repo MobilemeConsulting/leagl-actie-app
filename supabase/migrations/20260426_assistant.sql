@@ -27,11 +27,11 @@ create table if not exists assistant_extracted_actions (
   due_date date,
   priority text,
   category_hint text,
-  category_id uuid references categories(id),
+  category_id integer references categories(id),
   assigned_to_email text,
   confidence numeric(3,2),
   status text not null default 'pending',
-  created_action_id uuid references actions(id),
+  created_action_id integer references actions(id),
   raw_llm_payload jsonb,
   created_at timestamptz not null default now()
 );
@@ -45,7 +45,7 @@ create table if not exists assistant_settings (
   persona text default 'zakelijk-direct',
   brevity smallint default 2,
   proactivity smallint default 2,
-  default_category_id uuid references categories(id),
+  default_category_id integer references categories(id),
   default_assignee_email text,
   default_priority text default 'medium',
   confirm_before_save boolean default true,

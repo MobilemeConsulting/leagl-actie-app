@@ -121,9 +121,6 @@ export default function AssistantPage() {
 
       const conv = await Conversation.startSession({
         agentId: config.agent_id,
-        overrides: {
-          tts: { voiceId: config.voice_id },
-        },
         onStatusChange: ({ status: s }) => {
           if (s === 'connected') setStatus('listening')
           else if (s === 'disconnected') setStatus('idle')
