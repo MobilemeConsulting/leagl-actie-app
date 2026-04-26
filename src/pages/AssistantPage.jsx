@@ -19,6 +19,18 @@ const END_CALL_PATTERNS = [
 function isEndCallPhrase(text) {
   return END_CALL_PATTERNS.some(re => re.test(text))
 }
+
+// Trefwoorden die automatisch een sessiesamenvatting per e-mail triggeren.
+const EMAIL_SUMMARY_PATTERNS = [
+  /\b(mail|email|e-?mail)\s+(me|mij)\b/i,
+  /\bstuur\s+(me|mij|het|de\s+samenvatting)\b/i,
+  /\bverstuur\s+(de\s+)?samenvatting\b/i,
+  /\bsamenvatting\s+(in|naar)\s+(mijn\s+)?inbox\b/i,
+  /\bzet (het|dit) in mijn (mail|mailbox|inbox)\b/i,
+]
+function isEmailRequest(text) {
+  return EMAIL_SUMMARY_PATTERNS.some(re => re.test(text))
+}
 const PRIORITY_LABELS = {
   low: 'Laag', medium: 'Normaal', high: 'Hoog', urgent: 'Urgent',
 }
@@ -129,6 +141,10 @@ export default function AssistantPage() {
     setTranscript(t => [...t, entry])
     if (role === 'user') {
       triggerAnalyze()
+      if (isEmailRequest(text)) {
+        // Wacht tot Claude de samenvatting heeft bijgewerkt (analyze + buffer), stuur dan automatisch
+        setTimeout(() => { sendEmailRef.current?.() }, ANALYZE_DEBOUNCE_MS + 1500)
+      }
       if (isEndCallPhrase(text)) {
         // Geef de assistent ~1 sec om iets terug te zeggen, sluit dan af
         setTimeout(() => { stopRef.current?.() }, 1200)
@@ -137,6 +153,7 @@ export default function AssistantPage() {
   }, [triggerAnalyze])
 
   const stopRef = useRef(null)
+  const sendEmailRef = useRef(null)
 
   const start = useCallback(async () => {
     setErrorMsg(null)
@@ -238,7 +255,7 @@ export default function AssistantPage() {
     } catch (e) { console.warn(e) }
   }
 
-  const sendEmail = async () => {
+  const sendEmail = useCallback(async () => {
     if (!sessionIdRef.current) return
     setEmailStatus('sending')
     try {
@@ -247,7 +264,10 @@ export default function AssistantPage() {
     } catch (e) {
       setEmailStatus(`Fout: ${e.message}`)
     }
-  }
+  }, [])
+
+  // Houd sendEmailRef in sync zodat handleMessage de meest recente versie kan oproepen
+  useEffect(() => { sendEmailRef.current = sendEmail }, [sendEmail])
 
   const isActive = status === 'listening' || status === 'speaking'
   const isStarting = status === 'starting'
