@@ -73,7 +73,11 @@ app.post('/api/quick-action', async (req, res) => {
 const VOICE_TOKEN = process.env.VOICE_TOKEN
 
 function checkVoiceAuth(req, res) {
-  if (VOICE_TOKEN && req.headers['x-voice-token'] !== VOICE_TOKEN) {
+  // Accepteert OF VOICE_TOKEN OF ASSISTANT_TOKEN (vereenvoudiging — één token voor alle voice tools).
+  const provided = req.headers['x-voice-token']
+  const validTokens = [VOICE_TOKEN, ASSISTANT_TOKEN].filter(Boolean)
+  if (validTokens.length === 0) return true // dev: geen tokens ingesteld = open
+  if (!provided || !validTokens.includes(provided)) {
     res.status(401).json({ error: 'Unauthorized' })
     return false
   }
