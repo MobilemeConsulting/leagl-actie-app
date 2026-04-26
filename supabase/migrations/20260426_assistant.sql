@@ -25,6 +25,9 @@ create table if not exists assistant_extracted_actions (
   subject text not null,
   description text,
   due_date date,
+  due_time text,                -- 'HH:MM', optioneel; vult dateTime in calendar event
+  duration_minutes integer,     -- optioneel; standaard 60 voor afspraken
+  kind text default 'task',     -- 'task' | 'appointment' — bepaalt of er een Calendar event komt
   priority text,
   category_hint text,
   category_id integer references categories(id),
