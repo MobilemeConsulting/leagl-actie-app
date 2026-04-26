@@ -42,6 +42,10 @@ export function buildSystemPrompt({
     .map(a => `- ${a.subject}${a.due_date ? ` (deadline ${a.due_date})` : ''}${a.assigned_to_email ? ` — ${a.assigned_to_email}` : ''}`)
     .join('\n') || '(geen open acties)'
 
+  const alreadyExtractedList = (context.already_extracted || [])
+    .map(s => `- ${s}`)
+    .join('\n') || '(nog geen)'
+
   const defaults = []
   if (settings.default_assignee_email) defaults.push(`Default toegewezen aan: ${settings.default_assignee_email}`)
   if (settings.default_priority) defaults.push(`Default prioriteit: ${settings.default_priority}`)
@@ -69,6 +73,9 @@ ${usersList}
 
 OPEN ACTIES VAN DE GEBRUIKER (max 20)
 ${openActionsList}
+
+REEDS GEËXTRAHEERDE ACTIES IN DEZE SESSIE (NIET OPNIEUW EXTRAHEREN!)
+${alreadyExtractedList}
 
 DOEL
 Je luistert naar de gebruiker, denkt mee, en extraheert concrete acties.
@@ -106,9 +113,11 @@ Retourneer ALTIJD geldige JSON volgens dit schema, en niets anders:
 REGELS
 - Verzin geen e-mailadressen, categorieën of deadlines die niet uit de conversatie komen.
 - Als een veld onbekend is: gebruik null (of een lege array).
+- **NIET DUPLICEREN**: extracted_actions mag GEEN actie bevatten waarvan het onderwerp (subject) al in 'REEDS GEËXTRAHEERDE ACTIES' staat — ook niet in een licht andere bewoording. Liever niets extraheren dan dubbel.
 - Als de gebruiker vraagt naar bestaande acties ("wat is urgent vandaag", "wat staat er open"): vat ze samen in spoken_response op basis van OPEN ACTIES hierboven, en laat extracted_actions leeg.
-- "Mail me dit" of "stuur me een samenvatting" → laat extracted_actions leeg, zet in spoken_response een bevestiging dat de samenvatting wordt verstuurd.
+- "Mail me dit" of "stuur me een samenvatting" → laat extracted_actions leeg, zet in spoken_response een bevestiging.
 - Als er geen nieuwe actie is: laat extracted_actions een lege array.
+- summary_delta mag voor incrementele updates leeg/null zijn — vul alleen aan wanneer er écht iets nieuws te melden is.
 - Geef ALLEEN de JSON terug, geen extra tekst, geen code-fences.`
 }
 
