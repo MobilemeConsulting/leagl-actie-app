@@ -4,6 +4,21 @@ import { assistantApi } from '../lib/assistantClient.js'
 import { supabase } from '../supabaseClient.js'
 
 const ANALYZE_DEBOUNCE_MS = 2500
+
+// Trefwoorden die de sessie automatisch afsluiten wanneer de gebruiker ze uitspreekt.
+// Match op losstaande woorden of korte zinnen, case-insensitive.
+const END_CALL_PATTERNS = [
+  /\bsluit\s+(de\s+)?(sessie|gesprek|verbinding|app)?\s*af\b/i,
+  /\b(stop|stoppen)(\s+(maar|nu|alsjeblieft))?\s*$/i,
+  /\b(tot ziens|doei|dag|salut)\b/i,
+  /\bdat was het\b/i,
+  /\b(we zijn|ik ben)\s+klaar\b/i,
+  /\beinde (van het )?gesprek\b/i,
+  /\bbeëindig(en)?\b/i,
+]
+function isEndCallPhrase(text) {
+  return END_CALL_PATTERNS.some(re => re.test(text))
+}
 const PRIORITY_LABELS = {
   low: 'Laag', medium: 'Normaal', high: 'Hoog', urgent: 'Urgent',
 }
@@ -103,8 +118,16 @@ export default function AssistantPage() {
     const entry = { role, text, ts: Date.now() }
     transcriptRef.current = [...transcriptRef.current, entry]
     setTranscript(t => [...t, entry])
-    if (role === 'user') triggerAnalyze()
+    if (role === 'user') {
+      triggerAnalyze()
+      if (isEndCallPhrase(text)) {
+        // Geef de assistent ~1 sec om iets terug te zeggen, sluit dan af
+        setTimeout(() => { stopRef.current?.() }, 1200)
+      }
+    }
   }, [triggerAnalyze])
+
+  const stopRef = useRef(null)
 
   const start = useCallback(async () => {
     setErrorMsg(null)
@@ -150,6 +173,7 @@ export default function AssistantPage() {
   }, [handleMessage])
 
   const stop = useCallback(async () => {
+    if (status === 'stopping' || status === 'idle') return
     setStatus('stopping')
     try { await convRef.current?.endSession() } catch {}
     convRef.current = null
@@ -162,7 +186,10 @@ export default function AssistantPage() {
     }
     releaseWakeLock()
     setStatus('idle')
-  }, [])
+  }, [status])
+
+  // Houd stopRef gesynchroniseerd zodat handleMessage de meest recente versie kan oproepen
+  useEffect(() => { stopRef.current = stop }, [stop])
 
   // Auto-start na eerste tap (browser vereist user gesture voor mic)
   const [autoArmed, setAutoArmed] = useState(false)
