@@ -138,7 +138,7 @@ export async function createGoogleTask({ accessToken, tasklistId = '@default', a
 export async function createCalendarEvent({ accessToken, calendarId = 'primary', action }) {
   if (!action.due_date) return null
   const body = {
-    summary: `Actie: ${action.subject}`,
+    summary: action.subject,
     description: action.description || '',
     start: { date: action.due_date },
     end: { date: nextDayIso(action.due_date) }, // exclusive end
