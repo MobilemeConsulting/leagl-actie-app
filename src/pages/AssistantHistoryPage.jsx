@@ -178,7 +178,8 @@ function statusStyle(status) {
 
 const S = {
   page: { minHeight: '100vh', backgroundColor: '#0f172a', color: '#e2e8f0',
-    fontFamily: 'system-ui, -apple-system, sans-serif', padding: '1.25rem',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    padding: 'calc(env(safe-area-inset-top, 0px) + 1.25rem) 1.25rem calc(env(safe-area-inset-bottom, 0px) + 1.25rem)',
   },
   header: { display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' },
   h1: { margin: 0, fontSize: '1.4rem', flex: 1 },
