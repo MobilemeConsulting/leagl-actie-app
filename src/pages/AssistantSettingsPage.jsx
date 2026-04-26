@@ -250,7 +250,7 @@ function Toggle({ label, checked, onChange }) {
 const S = {
   page: {
     minHeight: '100vh', backgroundColor: '#0f172a', color: '#e2e8f0',
-    padding: '1.5rem 1rem 4rem',
+    padding: 'calc(env(safe-area-inset-top, 0px) + 1.5rem) 1rem calc(env(safe-area-inset-bottom, 0px) + 4rem)',
     fontFamily: 'system-ui, -apple-system, sans-serif',
     maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem',
   },

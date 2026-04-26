@@ -443,7 +443,9 @@ const S = {
     minHeight: '100vh', backgroundColor: '#0f172a',
     display: 'flex', flexDirection: 'column', alignItems: 'center',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    padding: '1.5rem 1rem 4rem', gap: '1.25rem',
+    // Respecteer iOS safe-area (notch/Dynamic Island) zodat top-row niet achter status-bar valt
+    padding: 'calc(env(safe-area-inset-top, 0px) + 1.5rem) 1rem calc(env(safe-area-inset-bottom, 0px) + 4rem)',
+    gap: '1.25rem',
   },
   topRow: {
     width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
