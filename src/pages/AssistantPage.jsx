@@ -21,11 +21,11 @@ function isEndCallPhrase(text) {
 }
 
 // Trefwoorden die automatisch een sessiesamenvatting per e-mail triggeren.
-// Ruim opgevat: detect een mail-werkwoord ergens in de zin.
+// Ruim: matcht ook samenstellingen zoals "doormailen", "opmailen", "e-mailtje".
 const EMAIL_SUMMARY_PATTERNS = [
-  /\b(mail|email|e-?mail|mailtje|mailen)\b/i,        // elk woord met 'mail'
-  /\b(stuur|verstuur|stuurt|stuurde)\b.*\b(samenvatting|recap|overzicht)\b/i,
-  /\b(in|naar|op)\s+(mijn\s+)?(inbox|mailbox|mail|gmail)\b/i,
+  /mail/i,                                             // elk woord dat 'mail' bevat (mail, mailen, doormailen, e-mailtje, ...)
+  /\b(stuur|verstuur|stuurt|stuurde)\b.*\b(samenvatting|recap|overzicht|dit|het|me)\b/i,
+  /\b(in|naar|op)\s+(mijn\s+)?(inbox|mailbox|gmail)\b/i,
 ]
 function isEmailRequest(text) {
   const matched = EMAIL_SUMMARY_PATTERNS.some(re => re.test(text))
