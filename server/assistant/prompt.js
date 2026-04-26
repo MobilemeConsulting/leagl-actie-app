@@ -117,7 +117,7 @@ REGELS
 - Als de gebruiker vraagt naar bestaande acties ("wat is urgent vandaag", "wat staat er open"): vat ze samen in spoken_response op basis van OPEN ACTIES hierboven, en laat extracted_actions leeg.
 - "Mail me dit" of "stuur me een samenvatting" → laat extracted_actions leeg, zet in spoken_response een bevestiging.
 - Als er geen nieuwe actie is: laat extracted_actions een lege array.
-- summary_delta mag voor incrementele updates leeg/null zijn — vul alleen aan wanneer er écht iets nieuws te melden is.
+- summary_delta blijft LEEG (alle velden null of []) tenzij de gebruiker letterlijk vraagt om een samenvatting, recap, "vat samen", "mail me dit", of expliciet afsluit ("we zijn klaar", "sluit af"). Geen automatische samenvattingen.
 - Geef ALLEEN de JSON terug, geen extra tekst, geen code-fences.`
 }
 
