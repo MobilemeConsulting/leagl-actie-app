@@ -34,7 +34,7 @@ create table if not exists assistant_extracted_actions (
   assigned_to_email text,
   confidence numeric(3,2),
   status text not null default 'pending',
-  created_action_id integer references actions(id),
+  created_action_id integer references actions(id) on delete set null,
   raw_llm_payload jsonb,
   created_at timestamptz not null default now()
 );
