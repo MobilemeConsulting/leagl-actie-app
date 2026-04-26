@@ -135,11 +135,16 @@ export function makeAssistantRouter(supabase) {
 
       const context = await loadContext(req.tenantId)
 
+      // Eerder al geëxtraheerde acties van deze sessie ophalen om duplicaten te voorkomen
+      const { data: priorRows } = await supabase.from('assistant_extracted_actions')
+        .select('subject').eq('session_id', session_id).neq('status', 'rejected')
+      const alreadyExtracted = (priorRows || []).map(r => r.subject)
+
       const systemPrompt = buildSystemPrompt({
         settings,
         user: { email: effectiveUserEmail },
         tenant: { name: req.tenantName || 'organisatie' },
-        context,
+        context: { ...context, already_extracted: alreadyExtracted },
       })
 
       const { parsed, raw } = await analyzeTranscript({
@@ -399,7 +404,9 @@ export function makeAssistantRouter(supabase) {
     if (!user_email) return res.status(400).json({ error: 'user_email verplicht' })
     const allowed = ['persona', 'brevity', 'proactivity', 'default_category_id',
       'default_assignee_email', 'default_priority', 'confirm_before_save',
-      'email_summary_to', 'microsoft_sync_enabled', 'google_sync_enabled']
+      'email_summary_to', 'microsoft_sync_enabled',
+      'google_tasks_enabled', 'google_calendar_enabled', 'google_gmail_enabled',
+      'google_tasklist_id', 'google_calendar_id']
     const update = {}
     for (const k of allowed) if (k in fields) update[k] = fields[k]
     const { data, error } = await supabase.from('assistant_settings')
