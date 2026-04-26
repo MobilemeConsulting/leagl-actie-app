@@ -232,6 +232,13 @@ export function makeAssistantRouter(supabase) {
     const googleTokens = googleEnabled
       ? await loadAndRefreshTokens(supabase, tenantId, userEmail)
       : null
+    console.log('[assistant/confirm] flow:', {
+      userEmail: userEmail || '(geen)',
+      tasks: settings?.google_tasks_enabled || false,
+      calendar: settings?.google_calendar_enabled || false,
+      hasTokens: !!googleTokens?.access_token,
+      tokenScope: googleTokens?.scope || null,
+    })
 
     const { data: rows } = await supabase.from('assistant_extracted_actions')
       .select('*').in('id', extractedIds).eq('tenant_id', tenantId)
