@@ -11,6 +11,12 @@ async function mount() {
   if (path === '/voice') {
     const { default: VoicePage } = await import('./pages/VoicePage.jsx')
     root.render(<VoicePage />)
+  } else if (path === '/assistant') {
+    const { default: AssistantPage } = await import('./pages/AssistantPage.jsx')
+    root.render(<AssistantPage />)
+  } else if (path === '/assistant/settings') {
+    const { default: AssistantSettingsPage } = await import('./pages/AssistantSettingsPage.jsx')
+    root.render(<AssistantSettingsPage />)
   } else if (path === '/admin') {
     const { default: AdminDashboard } = await import('./pages/AdminDashboard.jsx');
     root.render(<LanguageProvider><AdminDashboard /></LanguageProvider>);

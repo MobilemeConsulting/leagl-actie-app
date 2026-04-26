@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@11labs/client": "^0.2.0",
+    "@anthropic-ai/sdk": "^0.32.1",
     "@supabase/supabase-js": "^2.39.0",
     "emailjs-com": "^3.2.0",
     "express": "^4.18.2",
