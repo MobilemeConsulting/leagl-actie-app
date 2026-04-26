@@ -69,6 +69,16 @@ export const assistantApi = {
   getVoiceConfig: () =>
     assistantFetch('/voice-token'),
 
+  listSessions: (user_email = null, limit = 50) => {
+    const qs = new URLSearchParams()
+    if (user_email) qs.set('user_email', user_email)
+    qs.set('limit', String(limit))
+    return assistantFetch(`/sessions?${qs.toString()}`)
+  },
+
+  getSession: (session_id) =>
+    assistantFetch(`/sessions/${session_id}`),
+
   getGoogleAuthUrl: (user_email, scopes = ['tasks', 'calendar']) =>
     assistantFetch(`/google/auth-url?user_email=${encodeURIComponent(user_email)}&scopes=${scopes.join(',')}`),
 

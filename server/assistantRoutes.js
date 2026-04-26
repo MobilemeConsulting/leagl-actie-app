@@ -309,6 +309,44 @@ export function makeAssistantRouter(supabase) {
     return created
   }
 
+  // Lijst van sessies (geschiedenis) — optioneel filter op user_email
+  router.get('/sessions', async (req, res) => {
+    const { user_email, limit = 50 } = req.query
+    let q = supabase.from('assistant_sessions')
+      .select('id, user_email, started_at, ended_at, source, summary')
+      .eq('tenant_id', req.tenantId)
+      .order('started_at', { ascending: false })
+      .limit(Math.min(Number(limit) || 50, 200))
+    if (user_email) q = q.eq('user_email', user_email)
+    const { data, error } = await q
+    if (error) return res.status(500).json({ error: error.message })
+
+    // Voor elke sessie: tel bevestigde acties
+    const ids = (data || []).map(s => s.id)
+    const counts = {}
+    if (ids.length) {
+      const { data: rows } = await supabase.from('assistant_extracted_actions')
+        .select('session_id, status').in('session_id', ids)
+      for (const r of rows || []) {
+        counts[r.session_id] = counts[r.session_id] || { confirmed: 0, pending: 0, rejected: 0 }
+        counts[r.session_id][r.status] = (counts[r.session_id][r.status] || 0) + 1
+      }
+    }
+    res.json({
+      sessions: (data || []).map(s => ({ ...s, action_counts: counts[s.id] || {} })),
+    })
+  })
+
+  // Detail van één sessie
+  router.get('/sessions/:id', async (req, res) => {
+    const { data: session, error: sErr } = await supabase.from('assistant_sessions')
+      .select('*').eq('id', req.params.id).eq('tenant_id', req.tenantId).single()
+    if (sErr || !session) return res.status(404).json({ error: 'sessie niet gevonden' })
+    const { data: actions } = await supabase.from('assistant_extracted_actions')
+      .select('*').eq('session_id', session.id).order('created_at', { ascending: true })
+    res.json({ session, actions: actions || [] })
+  })
+
   // Lijst extracted actions per sessie
   router.get('/extracted/:session_id', async (req, res) => {
     const { data, error } = await supabase.from('assistant_extracted_actions')
