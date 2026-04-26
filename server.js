@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { makeAssistantRouter, makeGoogleCallbackRouter } from './server/assistantRoutes.js'
+import { loadAndRefreshTokens, listRecentGmail } from './server/assistant/google.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -116,6 +117,27 @@ app.post('/api/voice/actie', async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message })
   res.json({ success: true, id: data.id, subject: data.subject })
+})
+
+// Tool 4: haal recente Gmail mails op (vereist gekoppelde Google account met gmail-scope)
+app.get('/api/voice/gmail', async (req, res) => {
+  if (!checkVoiceAuth(req, res)) return
+  try {
+    const userEmail = req.query.user_email || process.env.ASSISTANT_DEFAULT_USER_EMAIL
+    if (!userEmail) return res.status(400).json({ error: 'user_email vereist (querystring of ASSISTANT_DEFAULT_USER_EMAIL env)' })
+    const tokens = await loadAndRefreshTokens(supabase, TENANT_ID, userEmail)
+    if (!tokens?.access_token) return res.status(404).json({ error: 'Geen Google koppeling voor deze gebruiker' })
+    if (!(tokens.scope || '').includes('gmail.readonly')) {
+      return res.status(403).json({ error: 'Gmail-scope niet verleend bij Google login. Gebruiker moet opnieuw verbinden met Gmail-toggle aan.' })
+    }
+    const max = Math.min(Number(req.query.max) || 10, 25)
+    const query = req.query.q || 'in:inbox'
+    const messages = await listRecentGmail({ accessToken: tokens.access_token, max, query })
+    res.json({ messages, total: messages.length })
+  } catch (err) {
+    console.error('[voice/gmail] fout:', err.message)
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // Tool 3: haal open acties op

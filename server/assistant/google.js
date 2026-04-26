@@ -160,6 +160,43 @@ export async function createCalendarEvent({ accessToken, calendarId = 'primary',
   return json
 }
 
+// ─── Gmail: lijst recente messages ──────────────────────────────────────
+export async function listRecentGmail({ accessToken, max = 10, query = 'in:inbox' }) {
+  const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${max}&q=${encodeURIComponent(query)}`
+  const listRes = await fetch(listUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!listRes.ok) {
+    const txt = await listRes.text()
+    throw new Error(`Gmail list ${listRes.status}: ${txt}`)
+  }
+  const listJson = await listRes.json()
+  const ids = (listJson.messages || []).map(m => m.id)
+  if (!ids.length) return []
+
+  // Haal voor elke message id de metadata + snippet
+  const messages = await Promise.all(ids.map(async id => {
+    const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+    if (!r.ok) return null
+    const j = await r.json()
+    const headers = (j.payload?.headers || []).reduce((acc, h) => {
+      acc[h.name.toLowerCase()] = h.value
+      return acc
+    }, {})
+    return {
+      id: j.id,
+      thread_id: j.threadId,
+      from: headers.from || '',
+      subject: headers.subject || '(geen onderwerp)',
+      date: headers.date || '',
+      snippet: j.snippet || '',
+      unread: (j.labelIds || []).includes('UNREAD'),
+    }
+  }))
+  return messages.filter(Boolean)
+}
+
 function nextDayIso(yyyymmdd) {
   const d = new Date(`${yyyymmdd}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + 1)

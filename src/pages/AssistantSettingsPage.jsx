@@ -185,7 +185,7 @@ export default function AssistantSettingsPage() {
           <Toggle label="Maak Google Calendar event voor acties met deadline"
             checked={!!settings.google_calendar_enabled}
             onChange={v => update({ google_calendar_enabled: v })} />
-          <Toggle label="Gmail context (binnenkort beschikbaar)"
+          <Toggle label="Lees recente Gmail-mails (read-only)"
             checked={!!settings.google_gmail_enabled}
             onChange={v => update({ google_gmail_enabled: v })} />
           <Field label="Google Tasks lijst-id (leeg = standaardlijst)">
