@@ -187,7 +187,12 @@ export default function AssistantPage() {
           setStatus('error')
         },
         onDisconnect: ({ reason } = {}) => {
-          if (reason) setErrorMsg(`Verbinding verbroken: ${reason}`)
+          // 'user' = jij sloot zelf af (afsluitwoord of stop-knop). Geen fout, geen rode banner.
+          // 'agent' = ElevenLabs-agent sloot af (vaak na stilte of expliciet "tot ziens").
+          // andere = echte fout.
+          if (reason && reason !== 'user' && reason !== 'agent') {
+            setErrorMsg(`Verbinding verbroken: ${reason}`)
+          }
           setStatus('idle')
         },
       })
@@ -326,7 +331,8 @@ export default function AssistantPage() {
       </button>
 
       <div style={S.statusText}>
-        {status === 'idle' && !errorMsg && (autostart ? 'Tik om te starten' : 'Tik op de knop')}
+        {status === 'idle' && !errorMsg && transcript.length === 0 && (autostart ? 'Tik om te starten' : 'Tik op de knop')}
+        {status === 'idle' && !errorMsg && transcript.length > 0 && '✓ Sessie afgesloten'}
         {isStarting && 'Verbinden...'}
         {isListening && 'Ik luister...'}
         {isSpeaking && 'Aan het spreken...'}
