@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { makeAssistantRouter, makeGoogleCallbackRouter } from './server/assistantRoutes.js'
-import { loadAndRefreshTokens, listRecentGmail } from './server/assistant/google.js'
+import { loadAndRefreshTokens, listRecentGmail, listCalendarEvents } from './server/assistant/google.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -121,6 +121,25 @@ app.post('/api/voice/actie', async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message })
   res.json({ success: true, id: data.id, subject: data.subject })
+})
+
+// Tool 5: haal aankomende Google Calendar events op (vereist calendar.events scope — al actief)
+app.get('/api/voice/agenda', async (req, res) => {
+  if (!checkVoiceAuth(req, res)) return
+  try {
+    const userEmail = req.query.user_email || process.env.ASSISTANT_DEFAULT_USER_EMAIL
+    if (!userEmail) return res.status(400).json({ error: 'user_email vereist' })
+    const tokens = await loadAndRefreshTokens(supabase, TENANT_ID, userEmail)
+    if (!tokens?.access_token) return res.status(404).json({ error: 'Geen Google koppeling voor deze gebruiker' })
+    const max = Math.min(Number(req.query.max) || 10, 25)
+    const days = Math.min(Number(req.query.days) || 7, 60)
+    const calendarId = req.query.calendar_id || 'primary'
+    const events = await listCalendarEvents({ accessToken: tokens.access_token, calendarId, max, daysAhead: days })
+    res.json({ events, total: events.length })
+  } catch (err) {
+    console.error('[voice/agenda] fout:', err.message)
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // Tool 4: haal recente Gmail mails op (vereist gekoppelde Google account met gmail-scope)
