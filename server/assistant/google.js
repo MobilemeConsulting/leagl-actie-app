@@ -175,6 +175,34 @@ export async function createCalendarEvent({ accessToken, calendarId = 'primary',
   return json
 }
 
+// ─── Google Calendar: lijst aankomende events ──────────────────────────
+export async function listCalendarEvents({ accessToken, calendarId = 'primary', max = 10, daysAhead = 7 }) {
+  const now = new Date()
+  const future = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000)
+  const params = new URLSearchParams({
+    timeMin: now.toISOString(),
+    timeMax: future.toISOString(),
+    singleEvents: 'true',
+    orderBy: 'startTime',
+    maxResults: String(max),
+  })
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+  const json = await res.json()
+  if (!res.ok) throw new Error(`Google Calendar list ${res.status}: ${JSON.stringify(json)}`)
+  return (json.items || []).map(e => ({
+    id: e.id,
+    summary: e.summary || '(geen titel)',
+    description: e.description || '',
+    location: e.location || '',
+    start: e.start?.dateTime || e.start?.date || '',
+    end: e.end?.dateTime || e.end?.date || '',
+    all_day: !e.start?.dateTime,
+    attendees: (e.attendees || []).map(a => a.email).filter(Boolean),
+    status: e.status,
+  }))
+}
+
 // ─── Gmail: lijst recente messages ──────────────────────────────────────
 export async function listRecentGmail({ accessToken, max = 10, query = 'in:inbox' }) {
   const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${max}&q=${encodeURIComponent(query)}`
